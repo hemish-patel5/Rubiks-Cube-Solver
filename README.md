@@ -38,21 +38,56 @@ The system will:
 
 ### Current
 
-- Live camera preview
-- Rubik's Cube face scanning
-- Colour detection using OpenCV
-- Cube state validation
-- Solve history database
+- Live camera preview using a USB webcam or Raspberry Pi camera
+- Guided scanning of all six 3x3 faces
+- Per-session colour calibration from the six centre stickers
+- Colour-count validation and a solver-ready URFDLB facelet string
+- Incremental JSON storage of colours, raw BGR/HSV samples, and face images
 
 ### Planned
 
-- Full six-face scanning workflow
-- Automatic colour calibration
 - Rubik's Cube solving algorithm
 - Sense HAT status display
 - SQLite logging
 - LAMP web dashboard
 - Optional motorised rotating platform
+
+---
+
+# Running the Webcam Scanner
+
+Install the desktop dependencies and start the scanner from the repository root:
+
+```powershell
+python -m pip install -r requirements.txt
+python src/face_scan.py
+```
+
+The default `auto` backend first tries webcam device `0`, then Picamera2. Select a
+different USB webcam or force a backend with:
+
+```powershell
+python src/face_scan.py --backend opencv --device 1
+python src/face_scan.py --backend picamera2
+```
+
+Scan the faces in the order shown on screen. Keep the specified adjacent edge at
+the top of the image; this preserves the orientation needed by a Rubik's Cube
+solver. Use the keyboard controls shown in the preview:
+
+- `SPACE` captures the current face.
+- `B` goes back to rescan the previous face.
+- `R` clears the current scan.
+- `Q` closes the scanner.
+
+Each capture is stored immediately in `scan_output/cube_state.json`, along with
+`face_U.jpg` through `face_B.jpg`. The JSON contains the 3x3 colour matrix and raw
+BGR/HSV values for every sticker. After face six it also contains a 54-character
+`facelets_URFDLB` string and reports whether exactly nine stickers of every colour
+were found.
+
+For consistent results, use diffuse lighting, avoid reflections, fill the guide
+with the face, and keep sticker centres inside the small sample squares.
 
 ---
 
@@ -120,22 +155,22 @@ rubiks-cube-assistant/
 
 ## Phase 1 – Camera Setup
 
-- [ ] Configure Raspberry Pi camera
-- [ ] Live OpenCV camera preview
-- [ ] Create fixed 3×3 scanning overlay
+- [x] Configure Raspberry Pi and USB webcam backends
+- [x] Live OpenCV camera preview
+- [x] Create fixed 3×3 scanning overlay
 
 ## Phase 2 – Colour Detection
 
-- [ ] Capture HSV values
-- [ ] Create colour calibration dataset
-- [ ] Implement colour classification
-- [ ] Detect all nine stickers on a face
+- [x] Capture BGR and HSV values
+- [x] Calibrate from the six centre stickers for each scan
+- [x] Implement LAB nearest-reference colour classification
+- [x] Detect all nine stickers on a face
 
 ## Phase 3 – Cube Representation
 
-- [ ] Scan all six faces
-- [ ] Validate cube state
-- [ ] Detect invalid scans
+- [x] Scan and persist all six faces
+- [x] Validate six colour counts
+- [x] Report colour-count scan errors for rescanning
 
 ## Phase 4 – Cube Solver
 

@@ -1,0 +1,4 @@
+numpy>=1.24
+opencv-python>=4.8
+
+# Install Picamera2 separately from Raspberry Pi OS packages when using a Pi camera.
