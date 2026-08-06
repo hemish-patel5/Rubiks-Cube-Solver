@@ -44,12 +44,12 @@ FACE_SIZE = 270
 # Singmaster/Kociemba order.  These instructions preserve sticker orientation,
 # not just face colour, so the saved facelet string can later be sent to a solver.
 FACE_SEQUENCE = (
-    FaceDefinition("U", "white", "blue edge at the TOP"),
-    FaceDefinition("R", "red", "white edge at the TOP"),
-    FaceDefinition("F", "green", "white edge at the TOP"),
-    FaceDefinition("D", "yellow", "green edge at the TOP"),
-    FaceDefinition("L", "orange", "white edge at the TOP"),
-    FaceDefinition("B", "blue", "white edge at the TOP"),
+    FaceDefinition("U", "white", "blue face at the TOP"),
+    FaceDefinition("R", "red", "white face at the TOP"),
+    FaceDefinition("F", "green", "white face at the TOP"),
+    FaceDefinition("D", "yellow", "green face at the TOP"),
+    FaceDefinition("L", "orange", "white face at the TOP"),
+    FaceDefinition("B", "blue", "white face at the TOP"),
 )
 
 DISPLAY_BGR = {
