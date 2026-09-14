@@ -6,6 +6,8 @@ import argparse
 from pathlib import Path
 
 from cube.solver import solve_3x3
+from hardware.sense_hat_adapter import SenseHatAdapter
+from interface.guidance import show_guidance
 from vision.face_scan import ScanOutcome, create_camera, scan_cube
 
 
@@ -37,9 +39,12 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    controls = SenseHatAdapter()
+    controls.show_status("ready")
     try:
         camera = create_camera(args.backend, args.device)
     except RuntimeError as exc:
+        controls.show_status("error")
         raise SystemExit(f"Camera error: {exc}") from exc
 
     moves: list[str] | None = None
@@ -48,11 +53,14 @@ def main() -> None:
         nonlocal moves
         moves = solve_3x3(outcome.facelets_urfdlb)
 
-    outcome = scan_cube(camera, args.output, validate_and_solve)
+    outcome = scan_cube(camera, args.output, validate_and_solve, controls)
     if outcome is None:
         print("Scan cancelled")
         return
-    print("Solution:", " ".join(moves or []) or "already solved (0 moves)")
+    solution_moves = moves or []
+    print("Solution:", " ".join(solution_moves) or "already solved (0 moves)")
+    result = show_guidance(solution_moves, controls)
+    print("Guidance:", result)
 
 
 if __name__ == "__main__":

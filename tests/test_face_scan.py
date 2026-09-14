@@ -100,6 +100,14 @@ class FaceScannerTests(unittest.TestCase):
 
         camera = FakeCamera()
         messages: list[str] = []
+        statuses: list[str] = []
+
+        class FakeControls:
+            def poll_scanner_action(self) -> str | None:
+                return None
+
+            def show_status(self, status: str, detail: str = "") -> None:
+                statuses.append(status)
 
         def samples_for_frame(frame: np.ndarray) -> list[face_scan.SampleResult]:
             face = face_scan.FACE_SEQUENCE[int(frame[0, 0, 0])]
@@ -126,7 +134,9 @@ class FaceScannerTests(unittest.TestCase):
         ), mock.patch.object(face_scan.cv2, "imwrite", return_value=True), mock.patch.object(
             face_scan.cv2, "destroyAllWindows"
         ):
-            outcome = face_scan.scan_cube(camera, Path(directory), reject)
+            outcome = face_scan.scan_cube(
+                camera, Path(directory), reject, FakeControls()
+            )
             saved = json.loads(
                 (Path(directory) / "cube_state.json").read_text(encoding="utf-8")
             )
@@ -134,6 +144,10 @@ class FaceScannerTests(unittest.TestCase):
         self.assertIsNone(outcome)
         self.assertTrue(camera.closed)
         self.assertTrue(any("Invalid cube" in message for message in messages))
+        self.assertIn("scanning", statuses)
+        self.assertIn("accepted", statuses)
+        self.assertIn("calculating", statuses)
+        self.assertIn("error", statuses)
         self.assertFalse(saved["complete"])
         self.assertNotIn("B", saved["faces"])
 

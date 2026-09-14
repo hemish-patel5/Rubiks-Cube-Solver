@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -74,6 +75,12 @@ class Camera(Protocol):
     def read(self) -> np.ndarray: ...
 
     def close(self) -> None: ...
+
+
+class ScannerControls(Protocol):
+    def poll_scanner_action(self) -> str | None: ...
+
+    def show_status(self, status: str, detail: str = "") -> None: ...
 
 
 class OpenCVCamera:
@@ -427,12 +434,16 @@ def run_scanner(
     output_dir: Path,
     validate_outcome: Callable[[ScanOutcome], None] | None = None,
     exit_on_valid: bool = False,
+    controls: ScannerControls | None = None,
 ) -> ScanOutcome | None:
     captured: dict[str, list[SampleResult]] = {}
     face_index = 0
     message = "Fill the grid with the cube face, then press SPACE"
     last_preview = 0.0
     preview_colours: list[str] | None = None
+
+    if controls is not None:
+        controls.show_status("scanning", FACE_SEQUENCE[0].notation)
 
     try:
         while True:
@@ -450,14 +461,19 @@ def run_scanner(
             draw_status(display_frame, face_index, captured, message)
             cv2.imshow("Rubik's Cube 3x3 Scanner", display_frame)
             key = cv2.waitKey(1) & 0xFF
+            joystick_action = (
+                controls.poll_scanner_action() if controls is not None else None
+            )
 
-            if key == ord("q"):
+            if key == ord("q") or joystick_action == "cancel":
                 return None
-            if key == ord("r"):
+            if key == ord("r") or joystick_action == "reset":
                 captured.clear()
                 face_index = 0
                 message = "Scan reset"
-            elif key == ord("b"):
+                if controls is not None:
+                    controls.show_status("scanning", FACE_SEQUENCE[0].notation)
+            elif key == ord("b") or joystick_action == "back":
                 if face_index > 0:
                     face_index -= 1
                     removed = FACE_SEQUENCE[face_index].notation
@@ -467,7 +483,11 @@ def run_scanner(
                         captured.pop(later.notation, None)
                     message = f"Rescan face {removed}"
                     save_state(captured, output_dir)
-            elif key == ord(" ") and face_index < len(FACE_SEQUENCE):
+                    if controls is not None:
+                        controls.show_status("scanning", removed)
+            elif (
+                key == ord(" ") or joystick_action == "capture"
+            ) and face_index < len(FACE_SEQUENCE):
                 face = FACE_SEQUENCE[face_index]
                 samples = sample_grid(frame)
                 captured[face.notation] = samples
@@ -476,6 +496,8 @@ def run_scanner(
                 cv2.imwrite(str(image_path), frame)
                 state_path = save_state(captured, output_dir)
                 face_index += 1
+                if controls is not None:
+                    controls.show_status("accepted", face.notation)
 
                 if face_index == len(FACE_SEQUENCE):
                     state = build_state(captured)
@@ -483,17 +505,25 @@ def run_scanner(
                     if outcome is not None:
                         try:
                             if validate_outcome is not None:
+                                if controls is not None:
+                                    controls.show_status("calculating")
                                 validate_outcome(outcome)
                         except ValueError as exc:
                             message = f"Invalid cube: {exc}. Press B to rescan"
+                            if controls is not None:
+                                controls.show_status("error")
                         else:
                             message = f"Complete and valid - saved to {state_path}"
                             print(json.dumps(state, indent=2))
+                            if controls is not None:
+                                controls.show_status("complete")
                             if exit_on_valid:
                                 return outcome
                     else:
                         problems = state["validation_problems"]
                         message = "Check/rescan: " + "; ".join(problems)  # type: ignore[arg-type]
+                        if controls is not None:
+                            controls.show_status("error")
                         print(json.dumps(state, indent=2))
                 else:
                     message = f"Saved {face.notation}; rotate to the next instructed face"
@@ -506,6 +536,7 @@ def scan_cube(
     camera: Camera,
     output_dir: Path,
     validate_outcome: Callable[[ScanOutcome], None],
+    controls: ScannerControls | None = None,
 ) -> ScanOutcome | None:
     """Scan until a valid cube is accepted or the user cancels."""
     return run_scanner(
@@ -513,6 +544,7 @@ def scan_cube(
         output_dir,
         validate_outcome=validate_outcome,
         exit_on_valid=True,
+        controls=controls,
     )
 
 
@@ -537,12 +569,19 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    if str(Path(__file__).parents[1]) not in sys.path:
+        sys.path.insert(0, str(Path(__file__).parents[1]))
+    from hardware.sense_hat_adapter import SenseHatAdapter
+
     args = parse_args()
+    controls = SenseHatAdapter()
+    controls.show_status("ready")
     try:
         camera = create_camera(args.backend, args.device)
     except RuntimeError as exc:
+        controls.show_status("error")
         raise SystemExit(f"Camera error: {exc}") from exc
-    run_scanner(camera, args.output)
+    run_scanner(camera, args.output, controls=controls)
 
 
 if __name__ == "__main__":
