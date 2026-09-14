@@ -14,7 +14,7 @@ import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Protocol
+from typing import Callable, Protocol
 
 import cv2
 import numpy as np
@@ -33,6 +33,13 @@ class FaceDefinition:
     notation: str
     colour: str
     orientation: str
+
+
+@dataclass(frozen=True)
+class ScanOutcome:
+    """Minimal trusted handoff from the scanner to the solver."""
+
+    facelets_urfdlb: str
 
 
 GRID_SIZE = 3
@@ -325,6 +332,17 @@ def build_state(captured: dict[str, list[SampleResult]]) -> dict[str, object]:
     }
 
 
+def build_scan_outcome(
+    captured: dict[str, list[SampleResult]],
+) -> ScanOutcome | None:
+    """Return a solver handoff only after all existing scan checks pass."""
+    state = build_state(captured)
+    facelets = state["facelets_URFDLB"]
+    if not state["colour_count_valid"] or not isinstance(facelets, str):
+        return None
+    return ScanOutcome(facelets_urfdlb=facelets)
+
+
 def save_state(captured: dict[str, list[SampleResult]], output_dir: Path) -> Path:
     """Atomically save raw samples and classified colours as JSON."""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -404,7 +422,12 @@ def draw_status(
                 0.45, (255, 255, 255), 1, cv2.LINE_AA)
 
 
-def run_scanner(camera: Camera, output_dir: Path) -> None:
+def run_scanner(
+    camera: Camera,
+    output_dir: Path,
+    validate_outcome: Callable[[ScanOutcome], None] | None = None,
+    exit_on_valid: bool = False,
+) -> ScanOutcome | None:
     captured: dict[str, list[SampleResult]] = {}
     face_index = 0
     message = "Fill the grid with the cube face, then press SPACE"
@@ -429,7 +452,7 @@ def run_scanner(camera: Camera, output_dir: Path) -> None:
             key = cv2.waitKey(1) & 0xFF
 
             if key == ord("q"):
-                break
+                return None
             if key == ord("r"):
                 captured.clear()
                 face_index = 0
@@ -456,17 +479,41 @@ def run_scanner(camera: Camera, output_dir: Path) -> None:
 
                 if face_index == len(FACE_SEQUENCE):
                     state = build_state(captured)
-                    if state["colour_count_valid"]:
-                        message = f"Complete and valid - saved to {state_path}"
+                    outcome = build_scan_outcome(captured)
+                    if outcome is not None:
+                        try:
+                            if validate_outcome is not None:
+                                validate_outcome(outcome)
+                        except ValueError as exc:
+                            message = f"Invalid cube: {exc}. Press B to rescan"
+                        else:
+                            message = f"Complete and valid - saved to {state_path}"
+                            print(json.dumps(state, indent=2))
+                            if exit_on_valid:
+                                return outcome
                     else:
                         problems = state["validation_problems"]
                         message = "Check/rescan: " + "; ".join(problems)  # type: ignore[arg-type]
-                    print(json.dumps(state, indent=2))
+                        print(json.dumps(state, indent=2))
                 else:
                     message = f"Saved {face.notation}; rotate to the next instructed face"
     finally:
         camera.close()
         cv2.destroyAllWindows()
+
+
+def scan_cube(
+    camera: Camera,
+    output_dir: Path,
+    validate_outcome: Callable[[ScanOutcome], None],
+) -> ScanOutcome | None:
+    """Scan until a valid cube is accepted or the user cancels."""
+    return run_scanner(
+        camera,
+        output_dir,
+        validate_outcome=validate_outcome,
+        exit_on_valid=True,
+    )
 
 
 def parse_args() -> argparse.Namespace:
