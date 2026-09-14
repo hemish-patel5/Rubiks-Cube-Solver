@@ -43,13 +43,16 @@ The system will:
 - Per-session colour calibration from the six centre stickers
 - Colour-count validation and a solver-ready URFDLB facelet string
 - Incremental JSON storage of colours, raw BGR/HSV samples, and face images
+- Kociemba 1.2.1 physical-state validation and 3x3 solutions
+- OpenCV next/back/cancel move guidance
+- Sense HAT LED status and joystick controls with a laptop fallback
+- SQLite terminal history and retryable summary synchronization
+- Plain PHP/MySQL JSON endpoint and responsive read-only dashboard
 
 ### Planned
 
-- Rubik's Cube solving algorithm
-- Sense HAT status display
-- SQLite logging
-- LAMP web dashboard
+- Raspberry Pi camera and Sense HAT acceptance testing
+- Live LAMP deployment, HTTPS, upload/retry, and browser acceptance
 - Optional motorised rotating platform
 
 ---
@@ -89,6 +92,40 @@ were found.
 For consistent results, use diffuse lighting, avoid reflections, fill the guide
 with the face, and keep sticker centres inside the small sample squares.
 
+## Running the complete 3x3 assistant
+
+Use the full command to scan, validate, solve, guide, and record one run:
+
+```powershell
+python src/app.py --backend auto --device 0 --output scan_output --database data/solve_history.db
+```
+
+The scanner retains the existing OpenCV window, grid, face sequence, orientation
+prompts, photographs, and `cube_state.json`. A colour-balanced but physically
+impossible cube is reported in that same window so `B` or `R` can be used to
+rescan. A solved cube produces zero moves.
+
+Keyboard guidance uses `SPACE` or `N` for next, `B` for back, and `Q` to cancel.
+Sense HAT controls are:
+
+| Context | Joystick controls |
+|---|---|
+| Scanner | middle capture, left back, down reset, up cancel |
+| Guidance | right/middle next, left back, up cancel |
+
+If Sense HAT is unavailable, the application continues with keyboard controls.
+The LED matrix mirrors ready, scanning, accepted, error, calculating, current
+move, and complete states when hardware is present.
+
+Every run writes one `COMPLETE`, `ERROR`, or `CANCELLED` row to SQLite. To enable
+best-effort LAMP synchronization, set `RUBIKS_SYNC_URL` and
+`RUBIKS_SYNC_API_KEY` in the application environment. Pending rows are attempted
+once at startup and once after a terminal row is stored; failures remain pending.
+Only allowlisted terminal summaries leave the device—never face images, raw
+BGR/HSV samples, calibration evidence, or local paths. See
+[`docs/lamp-deployment.md`](docs/lamp-deployment.md) for server configuration and
+the live acceptance checklist.
+
 ---
 
 # Technologies
@@ -113,7 +150,7 @@ with the face, and keep sticker centres inside the small sample squares.
 - Apache
 - PHP
 - MySQL
-- Git & GitHub
+- Git & Bitbucket
 - Trello
 
 ---
@@ -123,20 +160,16 @@ with the face, and keep sticker centres inside the small sample squares.
 ```text
 rubiks-cube-assistant/
 │
-├── config/                 # Application configuration files
 ├── src/
-│   └── vision/
-│       └── face_scan.py   # Existing fixed-grid LAB scanner
-│
-├── calibration/            # Colour calibration data
-├── captures/               # Captured images
-├── database/               # SQLite database
-├── docs/                   # Project documentation
-├── hardware/               # Hardware designs and wiring
-├── scripts/                # Utility scripts
-├── tests/                  # Unit tests
-├── web/                    # LAMP dashboard
-│
+│   ├── app.py              # Full 3x3 workflow
+│   ├── cube/solver.py      # Kociemba adapter
+│   ├── hardware/           # Optional Sense HAT adapter
+│   ├── interface/          # OpenCV move guidance
+│   ├── storage/            # SQLite history and HTTP sync
+│   └── vision/face_scan.py # Existing fixed-grid LAB scanner
+├── docs/                   # Deployment and acceptance guidance
+├── tests/                  # unittest regression and contract tests
+├── web/                    # PHP endpoint, MySQL schema, dashboard
 ├── README.md
 ├── requirements.txt
 └── .gitignore
@@ -167,16 +200,16 @@ rubiks-cube-assistant/
 
 ## Phase 4 – Cube Solver
 
-- [ ] Integrate Rubik's Cube solving algorithm
-- [ ] Generate solving sequence
-- [ ] Display solving instructions
+- [x] Integrate Kociemba for 3x3 cubes
+- [x] Generate and validate solving sequences
+- [x] Display next/back/cancel solving instructions
 
 ## Phase 5 – Embedded Features
 
-- [ ] Sense HAT integration
-- [ ] SQLite database
-- [ ] LAMP web dashboard
-- [ ] Multithreading
+- [x] Sense HAT adapter with no-hardware fallback
+- [x] SQLite terminal history
+- [x] LAMP code and local security/data contract tests
+- [ ] Raspberry Pi and live LAMP acceptance
 
 ## Phase 6 – Optional Extension
 
@@ -186,16 +219,32 @@ rubiks-cube-assistant/
 
 # Project Status
 
-**Current Stage:** Initial Development
+**Current Stage:** Locally implemented 3x3 workflow; hardware and live LAMP acceptance pending
 
 Current progress:
 
 - ✅ Project selected
 - ✅ Repository created
 - ✅ Development environment being configured
-- ⏳ OpenCV Rubik's Cube scanning implementation in progress
-- ⏳ Colour calibration
-- ⏳ Cube state generation
+- ✅ Existing OpenCV/LAB team scanner preserved
+- ✅ 3x3 solver, move guidance, Sense HAT adapter, and SQLite history implemented
+- ✅ LAMP schema, authenticated write endpoint, and read-only dashboard implemented
+- ⏳ Raspberry Pi camera, Sense HAT, physical solve, and performance acceptance
+- ⏳ Live MySQL migration, HTTPS, authenticated upload/retry, and browser verification
+
+## Local verification
+
+From the repository root:
+
+```powershell
+python -m unittest discover -s tests -v
+python src/vision/face_scan.py --help
+python src/app.py --help
+php -l web/api/sessions.php
+php -l web/index.php
+```
+
+The PHP lint commands require PHP on the development machine or LAMP host.
 
 ---
 

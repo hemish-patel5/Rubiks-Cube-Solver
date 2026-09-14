@@ -187,14 +187,18 @@ def sample_grid(frame: np.ndarray) -> list[SampleResult]:
             centre_y - half : centre_y + half,
             centre_x - half : centre_x + half,
         ]
-        median_bgr = np.median(bgr_region.reshape(-1, 3), axis=0).astype(int)
-        median_hsv = np.median(hsv_region.reshape(-1, 3), axis=0).astype(int)
+        median_bgr = np.median(
+            np.asarray(bgr_region.reshape(-1, 3), dtype=np.float64), axis=0
+        ).astype(int)
+        median_hsv = np.median(
+            np.asarray(hsv_region.reshape(-1, 3), dtype=np.float64), axis=0
+        ).astype(int)
         results.append(
             SampleResult(
                 row=row,
                 column=column,
-                bgr=tuple(int(value) for value in median_bgr),
-                hsv=tuple(int(value) for value in median_hsv),
+                bgr=(int(median_bgr[0]), int(median_bgr[1]), int(median_bgr[2])),
+                hsv=(int(median_hsv[0]), int(median_hsv[1]), int(median_hsv[2])),
             )
         )
     return results

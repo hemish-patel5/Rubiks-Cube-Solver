@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import argparse
+import time
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 from cube.solver import solve_3x3
 from hardware.sense_hat_adapter import SenseHatAdapter
 from interface.guidance import show_guidance
+from storage.history import SolveHistory, SolveRecord
+from storage.sync import HttpSummaryUploader, retry_pending
 from vision.face_scan import ScanOutcome, create_camera, scan_cube
 
 
@@ -39,28 +44,63 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    history = SolveHistory(args.database)
+    history.initialize()
+    uploader = HttpSummaryUploader.from_environment()
+    retry_pending(history, uploader)
+
+    session_id = str(uuid.uuid4())
+    started_at = datetime.now(timezone.utc).isoformat()
+    facelets: str | None = None
+    moves: list[str] = []
+    solve_duration_seconds: float | None = None
+    terminal_status = "ERROR"
+    error_message: str | None = None
     controls = SenseHatAdapter()
     controls.show_status("ready")
+
     try:
         camera = create_camera(args.backend, args.device)
-    except RuntimeError as exc:
+
+        def validate_and_solve(outcome: ScanOutcome) -> None:
+            nonlocal facelets, moves
+            facelets = outcome.facelets_urfdlb
+            moves = solve_3x3(facelets)
+
+        outcome = scan_cube(camera, args.output, validate_and_solve, controls)
+        if outcome is None:
+            terminal_status = "CANCELLED"
+            print("Scan cancelled")
+        else:
+            print("Solution:", " ".join(moves) or "already solved (0 moves)")
+            solve_started = time.monotonic()
+            try:
+                terminal_status = show_guidance(moves, controls)
+            finally:
+                solve_duration_seconds = time.monotonic() - solve_started
+            print("Guidance:", terminal_status)
+    except Exception as exc:
         controls.show_status("error")
-        raise SystemExit(f"Camera error: {exc}") from exc
+        terminal_status = "ERROR"
+        error_message = str(exc)
+        print(f"Application error: {exc}")
+    finally:
+        history.record(
+            SolveRecord(
+                session_id=session_id,
+                started_at=started_at,
+                finished_at=datetime.now(timezone.utc).isoformat(),
+                status=terminal_status,
+                facelets_urfdlb=facelets,
+                moves=tuple(moves),
+                solve_duration_seconds=solve_duration_seconds,
+                error_message=error_message,
+            )
+        )
+        retry_pending(history, uploader)
 
-    moves: list[str] | None = None
-
-    def validate_and_solve(outcome: ScanOutcome) -> None:
-        nonlocal moves
-        moves = solve_3x3(outcome.facelets_urfdlb)
-
-    outcome = scan_cube(camera, args.output, validate_and_solve, controls)
-    if outcome is None:
-        print("Scan cancelled")
-        return
-    solution_moves = moves or []
-    print("Solution:", " ".join(solution_moves) or "already solved (0 moves)")
-    result = show_guidance(solution_moves, controls)
-    print("Guidance:", result)
+    if terminal_status == "ERROR":
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
