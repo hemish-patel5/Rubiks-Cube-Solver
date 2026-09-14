@@ -60,15 +60,15 @@ Install the desktop dependencies and start the scanner from the repository root:
 
 ```powershell
 python -m pip install -r requirements.txt
-python src/face_scan.py
+python src/vision/face_scan.py
 ```
 
 The default `auto` backend first tries webcam device `0`, then Picamera2. Select a
 different USB webcam or force a backend with:
 
 ```powershell
-python src/face_scan.py --backend opencv --device 1
-python src/face_scan.py --backend picamera2
+python src/vision/face_scan.py --backend opencv --device 1
+python src/vision/face_scan.py --backend picamera2
 ```
 
 Scan the faces in the order shown on screen. Keep the specified adjacent edge at
@@ -125,15 +125,8 @@ rubiks-cube-assistant/
 │
 ├── config/                 # Application configuration files
 ├── src/
-│   └── rubiks_assistant/
-│       ├── camera/
-│       ├── vision/
-│       ├── cube/
-│       ├── interface/
-│       ├── storage/
-│       ├── web/
-│       ├── motor/
-│       └── utils/
+│   └── vision/
+│       └── face_scan.py   # Existing fixed-grid LAB scanner
 │
 ├── calibration/            # Colour calibration data
 ├── captures/               # Captured images

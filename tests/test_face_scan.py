@@ -9,7 +9,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "src"))
 
-import face_scan
+from vision import face_scan
 
 
 COLOUR_BGR = {
