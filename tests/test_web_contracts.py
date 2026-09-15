@@ -24,13 +24,22 @@ class LampContractTests(unittest.TestCase):
         for forbidden in ("raw_bgr", "raw_hsv", "image_path", "output_dir", "calibration"):
             self.assertNotIn(forbidden, ENDPOINT)
 
-    def test_dashboard_is_read_only_and_contains_required_statistics(self) -> None:
-        self.assertNotIn("<form", DASHBOARD)
+    def test_dashboard_contains_required_statistics(self) -> None:
         for label in (
             "Total attempts", "Completed solves", "Success rate", "Average moves",
             "Average solve time", "Recent sessions", "Recent errors",
         ):
             self.assertIn(label, DASHBOARD)
+
+    def test_dashboard_deletion_requires_authentication_csrf_and_prepared_sql(self) -> None:
+        self.assertIn("hash_equals($configuredKey, $providedKey)", DASHBOARD)
+        self.assertIn("hash_equals($_SESSION['csrf_token'], $csrf)", DASHBOARD)
+        self.assertIn("if (!$canRemove)", DASHBOARD)
+        self.assertIn("DELETE FROM solve_runs WHERE session_id = :session_id", DASHBOARD)
+        self.assertIn("$statement->execute(['session_id' => $sessionId])", DASHBOARD)
+        self.assertIn('name="session_id"', DASHBOARD)
+        self.assertIn('name="action" value="delete"', DASHBOARD)
+        self.assertIn("303", DASHBOARD)
 
 
 if __name__ == "__main__":

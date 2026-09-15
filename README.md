@@ -47,7 +47,7 @@ The system will:
 - OpenCV next/back/cancel move guidance
 - Sense HAT LED status and joystick controls with a laptop fallback
 - SQLite terminal history and retryable summary synchronization
-- Plain PHP/MySQL JSON endpoint and responsive read-only dashboard
+- Plain PHP/MySQL JSON endpoint and responsive dashboard with authenticated session removal
 
 ### Planned
 
@@ -140,6 +140,14 @@ Only allowlisted terminal summaries leave the device—never face images, raw
 BGR/HSV samples, calibration evidence, or local paths. See
 [`docs/lamp-deployment.md`](docs/lamp-deployment.md) for server configuration and
 the live acceptance checklist.
+
+The dashboard lists sessions in pages of 25. Enter the existing upload API key
+once under **Enable removal** to unlock each session's **Remove** button for
+that browser session. Removal deletes the MySQL/MariaDB record and recalculates
+statistics. The dashboard database account needs `SELECT` and `DELETE` permission.
+Local SQLite history and scan files remain on the Pi. Synced local records are
+not automatically uploaded again; manually re-uploading a deleted session will
+recreate its server record.
 
 ---
 
@@ -243,7 +251,7 @@ Current progress:
 - ✅ Development environment being configured
 - ✅ Existing OpenCV/LAB team scanner preserved
 - ✅ 3x3 solver, move guidance, Sense HAT adapter, and SQLite history implemented
-- ✅ LAMP schema, authenticated write endpoint, and read-only dashboard implemented
+- ✅ LAMP schema, authenticated write endpoint, and dashboard with session removal implemented
 - ⏳ Raspberry Pi camera, Sense HAT, physical solve, and performance acceptance
 - ⏳ Live MySQL migration, HTTPS, authenticated upload/retry, and browser verification
 
