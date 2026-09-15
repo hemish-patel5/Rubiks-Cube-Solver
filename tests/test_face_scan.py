@@ -80,6 +80,34 @@ class FaceScannerTests(unittest.TestCase):
         self.assertEqual(state["faces"]["U"]["colours"][1][1], "white")
         self.assertEqual(len(state["faces"]["U"]["samples"]), 9)
 
+    def test_shadowed_yellow_from_webcam_scan(self) -> None:
+        # Real centre samples and the confirmed yellow U bottom-left sticker.
+        references = {
+            "white": (190, 177, 166), "red": (71, 70, 179),
+            "green": (58, 111, 36), "yellow": (39, 216, 205),
+            "orange": (38, 127, 192), "blue": (173, 51, 31),
+        }
+        samples = [
+            face_scan.SampleResult(2, 0, (41, 152, 144), (32, 185, 152)),
+            face_scan.SampleResult(0, 0, (57, 134, 191), (17, 179, 191)),
+        ]
+        self.assertEqual(
+            face_scan.classify_samples(samples, references), ["yellow", "orange"]
+        )
+
+    def test_calibrated_colours_survive_brightness_changes(self) -> None:
+        references = COLOUR_BGR
+        for colour, bgr in references.items():
+            for brightness in (0.3, 0.5, 0.8, 1.0):
+                with self.subTest(colour=colour, brightness=brightness):
+                    shaded = tuple(round(channel * brightness) for channel in bgr)
+                    pixel = np.array([[shaded]], dtype=np.uint8)
+                    hsv = tuple(int(v) for v in cv2.cvtColor(pixel, cv2.COLOR_BGR2HSV)[0, 0])
+                    result = face_scan.SampleResult(0, 0, shaded, hsv)
+                    self.assertEqual(
+                        face_scan.classify_samples([result], references), [colour]
+                    )
+
     def test_solver_rejection_stays_in_scanner_for_back_rescan(self) -> None:
         class FakeCamera:
             def __init__(self) -> None:

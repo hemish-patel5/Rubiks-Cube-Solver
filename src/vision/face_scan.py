@@ -17,6 +17,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Protocol
 
+if __package__:
+    from .qt_runtime import configure_opencv_display
+else:
+    from qt_runtime import configure_opencv_display
+
+configure_opencv_display()
+
 import cv2
 import numpy as np
 
@@ -209,6 +216,21 @@ def bgr_to_lab(bgr: tuple[int, int, int]) -> np.ndarray:
     return cv2.cvtColor(pixel, cv2.COLOR_BGR2LAB)[0, 0].astype(float)
 
 
+def colour_reference_lab(bgr: tuple[int, int, int]) -> np.ndarray:
+    """Compare colours at equal brightness while preserving channel ratios.
+
+    A shadow can make yellow closer to orange in raw LAB distance. Scaling
+    both stickers and centres to the same maximum channel removes that
+    brightness difference without discarding saturation (needed for white).
+    """
+    channels = np.asarray(bgr, dtype=np.float64)
+    brightness = float(channels.max())
+    if brightness == 0:
+        return bgr_to_lab(bgr)
+    normalized = np.rint(channels * (255.0 / brightness)).astype(np.uint8)
+    return bgr_to_lab(tuple(int(channel) for channel in normalized))
+
+
 def heuristic_colour(hsv: tuple[int, int, int]) -> str:
     """Fallback live-preview classifier used before all centres are captured."""
     hue, saturation, value = hsv
@@ -244,15 +266,15 @@ def classify_samples(
     samples: list[SampleResult],
     references: dict[str, tuple[int, int, int]],
 ) -> list[str]:
-    """Classify stickers by nearest session centre in OpenCV LAB space."""
+    """Classify stickers by brightness-normalized session centres in LAB."""
     if len(references) < 6:
         return [heuristic_colour(sample.hsv) for sample in samples]
     reference_lab = {
-        colour: bgr_to_lab(bgr) for colour, bgr in references.items()
+        colour: colour_reference_lab(bgr) for colour, bgr in references.items()
     }
     colours: list[str] = []
     for sample in samples:
-        sample_lab = bgr_to_lab(sample.bgr)
+        sample_lab = colour_reference_lab(sample.bgr)
         colours.append(
             min(
                 reference_lab,

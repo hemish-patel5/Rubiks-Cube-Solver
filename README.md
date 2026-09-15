@@ -74,6 +74,12 @@ python src/vision/face_scan.py --backend opencv --device 1
 python src/vision/face_scan.py --backend picamera2
 ```
 
+On Linux desktops, the scanner and full assistant automatically select `xcb`
+when OpenCV bundles that Qt plugin without a Wayland plugin. You can run the
+normal command without a `QT_QPA_PLATFORM=xcb` prefix. A desktop display
+connection is still required; a plain SSH session without forwarding cannot
+show the preview.
+
 Scan the faces in the order shown on screen. Keep the specified adjacent edge at
 the top of the image; this preserves the orientation needed by a Rubik's Cube
 solver. Use the keyboard controls shown in the preview:
@@ -91,6 +97,15 @@ were found.
 
 For consistent results, use diffuse lighting, avoid reflections, fill the guide
 with the face, and keep sticker centres inside the small sample squares.
+Final classification compares stickers with the six centre references after
+normalizing their brightness, reducing yellow/orange confusion in shadows.
+Before all six centres are captured, preview and saved partial-scan colours use
+provisional HSV thresholds. Once all centres are available, every saved sticker
+is reclassified with the calibrated LAB classifier, so final labels may differ
+from the earlier preview. The live colour overlay also refreshes every 150 ms,
+while capture samples the current frame.
+Glare, deep shadows, and camera white-balance changes can still affect colours;
+colour-count and physical-state validation remain required before solving.
 
 ## Running the complete 3x3 assistant
 

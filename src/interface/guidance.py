@@ -5,6 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
+from vision.qt_runtime import configure_opencv_display
+
+configure_opencv_display()
+
 import cv2
 import numpy as np
 
