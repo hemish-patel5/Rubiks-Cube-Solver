@@ -47,7 +47,7 @@ The system will:
 - OpenCV next/back/cancel move guidance
 - Sense HAT LED status and joystick controls with a laptop fallback
 - SQLite terminal history and retryable summary synchronization
-- Plain PHP/MySQL JSON endpoint and responsive dashboard with authenticated session removal
+- Plain PHP/MySQL JSON endpoint and responsive dashboard with session removal
 
 ### Planned
 
@@ -141,9 +141,10 @@ BGR/HSV samples, calibration evidence, or local paths. See
 [`docs/lamp-deployment.md`](docs/lamp-deployment.md) for server configuration and
 the live acceptance checklist.
 
-The dashboard lists sessions in pages of 25. Enter the existing upload API key
-once under **Enable removal** to unlock each session's **Remove** button for
-that browser session. Removal deletes the MySQL/MariaDB record and recalculates
+The dashboard lists sessions in pages of 25 with a **Remove** button on each row.
+The API key is configured directly in server-side PHP and must match Apache's
+`RUBIKS_API_KEY`; it is never rendered in the browser. Every dashboard visitor
+can remove records without a login. Removal deletes the MySQL/MariaDB record and recalculates
 statistics. The dashboard database account needs `SELECT` and `DELETE` permission.
 Local SQLite history and scan files remain on the Pi. Synced local records are
 not automatically uploaded again; manually re-uploading a deleted session will

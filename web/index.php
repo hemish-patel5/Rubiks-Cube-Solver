@@ -1,6 +1,9 @@
 <?php
 declare(strict_types=1);
 
+// Server-side only; never render this key in the page or send it to the browser.
+const DASHBOARD_API_KEY = '986f42023fe3769e3af61ae02715a495fc47af0fb652614f93721bd01dc3c309';
+
 session_start([
     'use_strict_mode' => true,
     'cookie_httponly' => true,
@@ -29,10 +32,8 @@ $actionError = null;
 $notice = $_SESSION['notice'] ?? null;
 unset($_SESSION['notice']);
 $configuredKey = getenv('RUBIKS_API_KEY');
-$keyFingerprint = is_string($configuredKey) && $configuredKey !== ''
-    ? hash('sha256', $configuredKey) : null;
-$canRemove = $keyFingerprint !== null
-    && hash_equals($keyFingerprint, $_SESSION['remove_access'] ?? '');
+$canRemove = is_string($configuredKey)
+    && hash_equals($configuredKey, DASHBOARD_API_KEY);
 $page = max(1, (int) (filter_input(INPUT_GET, 'page', FILTER_VALIDATE_INT) ?: 1));
 $pageSize = 25;
 $pageCount = 1;
@@ -43,27 +44,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     if (!is_string($csrf) || !hash_equals($_SESSION['csrf_token'], $csrf)) {
         http_response_code(403);
         $actionError = 'Request expired. Reload the page and try again.';
-    } elseif ($action === 'unlock') {
-        $providedKey = $_POST['api_key'] ?? null;
-        if ($keyFingerprint !== null && is_string($providedKey)
-            && hash_equals($configuredKey, $providedKey)) {
-            session_regenerate_id(true);
-            $_SESSION['remove_access'] = $keyFingerprint;
-            $_SESSION['notice'] = 'Session removal enabled.';
-            header('Location: index.php?page=' . $page, true, 303);
-            exit;
-        }
-        http_response_code(403);
-        $actionError = 'API key is incorrect or server authentication is not configured.';
-    } elseif ($action === 'lock') {
-        unset($_SESSION['remove_access']);
-        header('Location: index.php?page=' . $page, true, 303);
-        exit;
     } elseif ($action === 'delete') {
         $sessionId = $_POST['session_id'] ?? null;
         if (!$canRemove) {
             http_response_code(403);
-            $actionError = 'Enter the API key to enable removal first.';
+            $actionError = 'Dashboard API key does not match server configuration.';
         } elseif (!is_string($sessionId) || !preg_match('/^[A-Za-z0-9-]{1,64}$/', $sessionId)) {
             http_response_code(400);
             $actionError = 'Invalid session ID.';
@@ -145,13 +130,10 @@ try {
         th { color: #aab3c5; }
         .error { color: #ffb4b4; }
         .notice { color: #a5e5b1; }
-        button, input { font: inherit; border-radius: 6px; padding: .5rem .75rem; }
+        button { font: inherit; border-radius: 6px; padding: .5rem .75rem; }
         button { cursor: pointer; background: #303a50; color: #f4f6fb; border: 1px solid #53617c; }
         button.remove { color: #ffb4b4; border-color: #9a5360; }
         button:disabled { opacity: .45; cursor: default; }
-        input { background: #10131a; color: #f4f6fb; border: 1px solid #53617c; max-width: 100%; box-sizing: border-box; }
-        .management { margin: 1rem 0; }
-        .management form { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; }
         .pagination { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 1rem; }
         a { color: #a7c8ff; }
         @media (max-width: 600px) { main { width: min(100% - 1rem, 1100px); margin: 1rem auto; } th, td { padding: .55rem; } }
@@ -173,27 +155,10 @@ try {
         <div class="card">Average moves<span class="value"><?= h($summary['average_move_count'] ?? '—') ?></span></div>
         <div class="card">Average solve time<span class="value"><?= h($summary['average_solve_time'] ?? '—') ?> s</span></div>
     </section>
-    <section class="panel management" aria-label="Session management">
-        <?php if (!$canRemove): ?>
-            <form method="post" action="index.php?page=<?= h($page) ?>">
-                <input type="hidden" name="action" value="unlock">
-                <input type="hidden" name="csrf_token" value="<?= h($_SESSION['csrf_token']) ?>">
-                <label for="api-key">API key</label>
-                <input id="api-key" type="password" name="api_key" required autocomplete="off">
-                <button type="submit">Enable removal</button>
-            </form>
-        <?php else: ?>
-            <form method="post" action="index.php?page=<?= h($page) ?>">
-                <input type="hidden" name="action" value="lock">
-                <input type="hidden" name="csrf_token" value="<?= h($_SESSION['csrf_token']) ?>">
-                <span>Session removal enabled.</span>
-                <button type="submit">Disable removal</button>
-            </form>
-        <?php endif; ?>
-        <p class="muted">Removal deletes the server record and updates statistics. Local scan files and Pi history are retained.</p>
-    </section>
     <section class="panel">
         <h2>Recent sessions</h2>
+        <p class="muted">Removal deletes the server record and updates statistics. Local scan files and Pi history are retained.</p>
+        <?php if (!$canRemove): ?><p class="error">Removal unavailable: dashboard API key does not match server configuration.</p><?php endif; ?>
         <div class="table-wrap"><table>
             <thead><tr><th>Finished (UTC)</th><th>Session</th><th>Status</th><th>Moves</th><th>Solve time</th><th>Actions</th></tr></thead>
             <tbody>

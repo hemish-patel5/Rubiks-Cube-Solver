@@ -31,8 +31,10 @@ class LampContractTests(unittest.TestCase):
         ):
             self.assertIn(label, DASHBOARD)
 
-    def test_dashboard_deletion_requires_authentication_csrf_and_prepared_sql(self) -> None:
-        self.assertIn("hash_equals($configuredKey, $providedKey)", DASHBOARD)
+    def test_dashboard_deletion_uses_server_key_csrf_and_prepared_sql(self) -> None:
+        self.assertIn("hash_equals($configuredKey, DASHBOARD_API_KEY)", DASHBOARD)
+        self.assertNotIn('name="api_key"', DASHBOARD)
+        self.assertNotIn("Enable removal", DASHBOARD)
         self.assertIn("hash_equals($_SESSION['csrf_token'], $csrf)", DASHBOARD)
         self.assertIn("if (!$canRemove)", DASHBOARD)
         self.assertIn("DELETE FROM solve_runs WHERE session_id = :session_id", DASHBOARD)

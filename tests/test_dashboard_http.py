@@ -36,6 +36,7 @@ class DashboardHttpTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         root = Path(self.temporary.name)
+        self.dashboard_path = root / "index.php"
         self.database = root / "history.db"
         with sqlite3.connect(self.database) as db:
             db.execute("""CREATE TABLE solve_runs (
@@ -49,6 +50,7 @@ class DashboardHttpTests(unittest.TestCase):
             ])
             db.execute("UPDATE solve_runs SET terminal_status='ERROR', error_message='camera failed' WHERE session_id='session-25'")
         source = (Path(__file__).parents[1] / "web/index.php").read_text()
+        self.api_key = re.search(r"const DASHBOARD_API_KEY = '([^']+)'", source)[1]
         # Run the production handler unchanged apart from selecting SQLite PDO.
         source = source.replace("declare(strict_types=1);", """declare(strict_types=1);
 namespace DashboardFixture;
@@ -69,7 +71,7 @@ class PDO extends \\PDO {
         environment.update(
             TEST_DATABASE=str(self.database), RUBIKS_DB_NAME="test",
             RUBIKS_DB_READ_USER="test", RUBIKS_DB_READ_PASSWORD="test",
-            RUBIKS_API_KEY="test-secret",
+            RUBIKS_API_KEY=self.api_key,
         )
         self.server = subprocess.Popen(
             [self.php, "-d", f"session.save_path={root}", "-S", f"127.0.0.1:{port}", "-t", str(root)],
@@ -107,16 +109,14 @@ class PDO extends \\PDO {
         with sqlite3.connect(self.database) as db:
             return db.execute("SELECT COUNT(*) FROM solve_runs").fetchone()[0]
 
-    def unlock(self) -> None:
-        self.post(action="unlock", api_key="test-secret", csrf_token=self.token())
-
     def test_removal_updates_rows_statistics_errors_and_pagination(self) -> None:
         page = self.get()
         self.assertIn("Page 1 of 2", page)
-        self.assertNotIn("test-secret", page)
+        self.assertNotIn(self.api_key, page)
+        self.assertNotIn("Enable removal", page)
+        self.assertNotIn('name="api_key"', page)
         self.assertIn("camera failed", page)
         self.assertIn("session-00", self.get("?page=2"))
-        self.unlock()
         page = self.post(action="delete", session_id="session-25", csrf_token=self.token())
         self.assertEqual(self.count(), 25)
         self.assertNotIn("session-25", page)
@@ -128,25 +128,25 @@ class PDO extends \\PDO {
         page = self.post(action="delete", session_id="session-25", csrf_token=self.token())
         self.assertIn("already removed", page)
 
-    def test_locked_wrong_key_and_invalid_csrf_requests_cannot_delete(self) -> None:
-        for fields in (
-            dict(action="delete", session_id="session-25", csrf_token=self.token()),
-            dict(action="unlock", api_key="incorrect", csrf_token=self.token()),
-        ):
-            with self.assertRaises(error.HTTPError) as caught:
-                self.post(**fields)
-            self.assertEqual(caught.exception.code, 403)
-            self.assertEqual(self.count(), 26)
-        self.unlock()
+    def test_invalid_csrf_and_session_ids_cannot_delete(self) -> None:
         with self.assertRaises(error.HTTPError) as caught:
             self.post(action="delete", session_id="session-25", csrf_token="incorrect")
         self.assertEqual(caught.exception.code, 403)
         self.assertEqual(self.count(), 26)
+
         with self.assertRaises(error.HTTPError) as caught:
             self.post(action="delete", session_id="' OR 1=1 --", csrf_token=self.token())
         self.assertEqual(caught.exception.code, 400)
         self.assertEqual(self.count(), 26)
-        self.post(action="lock", csrf_token=self.token())
+        with self.assertRaises(error.HTTPError) as caught:
+            self.post(action="delete", session_id="session-25")
+        self.assertEqual(caught.exception.code, 403)
+        self.assertEqual(self.count(), 26)
+
+    def test_mismatched_server_key_blocks_removal(self) -> None:
+        source = self.dashboard_path.read_text()
+        self.dashboard_path.write_text(source.replace(self.api_key, "different-server-key"))
+        self.assertIn("Removal unavailable", self.get())
         with self.assertRaises(error.HTTPError) as caught:
             self.post(action="delete", session_id="session-25", csrf_token=self.token())
         self.assertEqual(caught.exception.code, 403)

@@ -10,7 +10,7 @@ The PHP files require PHP 8.1 or newer with PDO MySQL enabled.
 - `web/schema.sql`: MySQL table keyed by `session_id`.
 - `web/api/sessions.php`: API-key-protected JSON `POST` endpoint with allowlisted
   fields, validation, prepared statements, and idempotent upsert.
-- `web/index.php`: responsive solve summary dashboard with API-key-unlocked
+- `web/index.php`: responsive solve summary dashboard with
   session removal, CSRF protection, and pagination.
 - `src/storage/sync.py`: standard-library uploader with a three-second timeout.
 
@@ -51,7 +51,8 @@ Apply the schema with an administrator-controlled account, then grant the API
 account only `INSERT` and `UPDATE`, and grant the dashboard account only
 `SELECT` and `DELETE`. A single account can also be used for both components with
 `SELECT`, `INSERT`, `UPDATE`, and `DELETE`. Keep credentials outside the web root
-and source control.
+and source control. The dashboard API key is currently hardcoded in server-side
+PHP at the project owner's request.
 
 ## Deploying session removal
 
@@ -72,11 +73,13 @@ Deploy the updated dashboard (no schema migration or API endpoint change needed)
 sudo install -m 644 web/index.php /var/www/html/rubiks/index.php
 ```
 
-Open `/rubiks/`, enter the existing `RUBIKS_API_KEY` under **Enable removal**, then
-use a session's **Remove** button. The key is not embedded in the page or stored
-in the database. Successful deletion redirects to the dashboard and updates
-totals, averages, recent sessions, and recent errors. **Disable removal** locks
-the controls again. API-key rotation invalidates existing removal access.
+Open `/rubiks/` and use a session's **Remove** button. There is no unlock section
+or browser login: every dashboard visitor can remove sessions. The server-side
+`DASHBOARD_API_KEY` constant must match Apache's `RUBIKS_API_KEY`. The key is not
+rendered in the HTML or stored in the database. Successful deletion redirects
+to the dashboard and updates totals, averages, recent sessions, and recent
+errors. When rotating the key, update the PHP constant as well as Apache and
+the Pi's sync settings.
 
 Removal affects the server database only. Local SQLite history, samples, and
 photographs remain on the Pi. Records already marked `synced=1` are not retried
@@ -99,7 +102,7 @@ failure leaves the row at `synced=0` for the next application run.
 - [ ] Interrupt connectivity, verify `synced=0`, then verify retry and idempotent upsert.
 - [ ] Open the dashboard on a LAN desktop and phone-sized browser.
 - [ ] Confirm totals, completed solves, success rate, average moves/time, recent sessions, and errors.
-- [ ] Unlock removal with the API key, remove a test session, and verify its
+- [ ] Remove a test session and verify its
       server row is absent and dashboard statistics update after refresh.
-- [ ] Verify locked controls, incorrect API keys, and invalid CSRF tokens cannot
+- [ ] Verify mismatched server/dashboard API keys and invalid CSRF tokens cannot
       delete rows; verify repeated deletion and deletion on the last page.
