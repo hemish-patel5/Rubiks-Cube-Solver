@@ -19,6 +19,12 @@ from vision.face_scan import ScanOutcome, create_camera, scan_cube
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--scan-mode",
+        choices=("angled-sides", "head-on"),
+        default="angled-sides",
+        help="camera workflow (default: angled views with inferred bottom face)",
+    )
+    parser.add_argument(
         "--backend",
         choices=("auto", "opencv", "picamera2"),
         default="auto",
@@ -67,7 +73,9 @@ def main() -> None:
             facelets = outcome.facelets_urfdlb
             moves = solve_3x3(facelets)
 
-        outcome = scan_cube(camera, args.output, validate_and_solve, controls)
+        outcome = scan_cube(
+            camera, args.output, validate_and_solve, controls, mode=args.scan_mode
+        )
         if outcome is None:
             terminal_status = "CANCELLED"
             print("Scan cancelled")

@@ -1,14 +1,15 @@
 """Guided webcam scanner for all 54 stickers on a 3x3 Rubik's Cube.
 
 The scanner supports an ordinary USB webcam through OpenCV and a Raspberry Pi
-camera through Picamera2.  Each face is sampled from a fixed 3x3 guide.  The six
-centre stickers are used as per-session colour references, which is substantially
-more reliable than fixed HSV thresholds under different lighting.
+camera through Picamera2. Faces are sampled from fixed perspective or head-on
+3x3 guides. Visible centre stickers provide per-session colour references; the
+hidden yellow class uses hue until a fallback yellow scan is requested.
 """
 
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import sys
 import time
@@ -335,13 +336,19 @@ def classify_samples(
     references: dict[str, tuple[int, int, int]],
 ) -> list[str]:
     """Classify stickers by brightness-normalized session centres in LAB."""
-    if len(references) < 6:
+    angled_five_centre_mode = len(references) == 5 and "yellow" not in references
+    if len(references) < 6 and not angled_five_centre_mode:
         return [heuristic_colour(sample.hsv) for sample in samples]
     reference_lab = {
         colour: colour_reference_lab(bgr) for colour, bgr in references.items()
     }
     colours: list[str] = []
     for sample in samples:
+        # Angled scanning never sees the yellow centre. Yellow remains reliably
+        # separable by hue, while the other five colours use session centres.
+        if "yellow" not in references and heuristic_colour(sample.hsv) == "yellow":
+            colours.append("yellow")
+            continue
         sample_lab = colour_reference_lab(sample.bgr)
         colours.append(
             min(
@@ -356,6 +363,7 @@ def classify_samples(
 
 def classify_cube(
     captured: dict[str, list[SampleResult]],
+    infer_bottom: bool = False,
 ) -> dict[str, list[str]]:
     references = centre_references(captured)
     classified: dict[str, list[str]] = {}
@@ -368,7 +376,113 @@ def classify_cube(
         # centre mismatch caused by glare explicit in the surrounding count check.
         colours[4] = face.colour
         classified[face.notation] = colours
+    if infer_bottom and set(classified) == {"U", "R", "F", "L", "B"}:
+        classified["D"] = infer_bottom_face(classified)
     return classified
+
+
+def infer_bottom_face(classified: dict[str, list[str]]) -> list[str]:
+    """Return D only when the five visible faces have one physical completion."""
+    required = {"U", "R", "F", "L", "B"}
+    if set(classified) != required:
+        raise ValueError("bottom inference requires exactly U, R, F, L, and B")
+    if any(len(classified[face]) != 9 for face in required):
+        raise ValueError("bottom inference requires nine stickers on every visible face")
+
+    white, red, green, yellow, orange, blue = (
+        "white", "red", "green", "yellow", "orange", "blue"
+    )
+    u, r, f, left, b = (
+        classified["U"], classified["R"], classified["F"],
+        classified["L"], classified["B"],
+    )
+    all_edges = [frozenset(pair) for pair in (
+        (white, red), (white, green), (white, orange), (white, blue),
+        (yellow, red), (yellow, green), (yellow, orange), (yellow, blue),
+        (green, red), (green, orange), (blue, orange), (blue, red),
+    )]
+    visible_edges = (
+        (u[5], r[1]), (u[7], f[1]), (u[3], left[1]), (u[1], b[1]),
+        (f[5], r[3]), (f[3], left[5]), (b[5], left[3]), (b[3], r[5]),
+    )
+    remaining_edges = all_edges.copy()
+    try:
+        for colours in visible_edges:
+            remaining_edges.remove(frozenset(colours))
+    except ValueError as exc:
+        raise ValueError("visible stickers contain a duplicate or invalid edge cubie") from exc
+
+    # D2, D6, D8, D4 are adjacent to F8, R8, B8, L8 respectively.
+    edge_observations = (f[7], r[7], b[7], left[7])
+    edge_completions: list[tuple[str, ...]] = []
+    for assignment in itertools.permutations(remaining_edges):
+        if all(observed in cubie for observed, cubie in zip(edge_observations, assignment)):
+            edge_completions.append(tuple(
+                next(iter(cubie - {observed}))
+                for observed, cubie in zip(edge_observations, assignment)
+            ))
+
+    all_corners = [frozenset(triple) for triple in (
+        (white, red, green), (white, green, orange),
+        (white, orange, blue), (white, blue, red),
+        (yellow, green, red), (yellow, orange, green),
+        (yellow, blue, orange), (yellow, red, blue),
+    )]
+    visible_corners = (
+        (u[8], r[0], f[2]), (u[6], f[0], left[2]),
+        (u[0], left[0], b[2]), (u[2], b[0], r[2]),
+    )
+    remaining_corners = all_corners.copy()
+    try:
+        for colours in visible_corners:
+            remaining_corners.remove(frozenset(colours))
+    except ValueError as exc:
+        raise ValueError("visible stickers contain a duplicate or invalid corner cubie") from exc
+
+    # D1, D3, D7, D9 expose two stickers on L/F, F/R, B/L, R/B.
+    corner_observations = (
+        (left[8], f[6]), (f[8], r[6]), (b[8], left[6]), (r[8], b[6]),
+    )
+    corner_completions: list[tuple[str, ...]] = []
+    for assignment in itertools.permutations(remaining_corners):
+        if all(
+            len(set(observed)) == 2 and set(observed) < cubie
+            for observed, cubie in zip(corner_observations, assignment)
+        ):
+            corner_completions.append(tuple(
+                next(iter(cubie - set(observed)))
+                for observed, cubie in zip(corner_observations, assignment)
+            ))
+
+    if not edge_completions or not corner_completions:
+        raise ValueError("visible stickers cannot form the missing bottom cubies")
+
+    try:
+        from kociemba.pykociemba.tools import verify
+    except ImportError as exc:
+        raise RuntimeError("Kociemba is required for bottom-face inference") from exc
+
+    physical_completions: set[tuple[str, ...]] = set()
+    for edges in edge_completions:
+        for corners in corner_completions:
+            bottom = (
+                corners[0], edges[0], corners[1], edges[3], yellow,
+                edges[1], corners[2], edges[2], corners[3],
+            )
+            candidate = dict(classified)
+            candidate["D"] = list(bottom)
+            facelets = make_facelet_string(candidate)
+            if facelets is not None and verify(facelets) == 0:
+                physical_completions.add(bottom)
+
+    if not physical_completions:
+        raise ValueError("visible stickers have no physically valid bottom face")
+    if len(physical_completions) > 1:
+        raise ValueError(
+            f"bottom face is ambiguous ({len(physical_completions)} physical completions); "
+            "scan yellow to continue"
+        )
+    return list(physical_completions.pop())
 
 
 def colour_counts(classified: dict[str, list[str]]) -> dict[str, int]:
@@ -402,29 +516,42 @@ def make_facelet_string(classified: dict[str, list[str]]) -> str | None:
     )
 
 
-def build_state(captured: dict[str, list[SampleResult]]) -> dict[str, object]:
-    classified = classify_cube(captured)
+def build_state(
+    captured: dict[str, list[SampleResult]],
+    infer_bottom: bool = False,
+) -> dict[str, object]:
+    inference_problem: str | None = None
+    try:
+        classified = classify_cube(captured, infer_bottom=infer_bottom)
+    except ValueError as exc:
+        classified = classify_cube(captured)
+        inference_problem = str(exc)
     valid, problems = validate_cube(classified)
+    if inference_problem is not None:
+        problems.insert(0, inference_problem)
     counts = colour_counts(classified)
     faces: dict[str, object] = {}
 
     for face in FACE_SEQUENCE:
         samples = captured.get(face.notation)
-        if samples is None:
+        if samples is None and face.notation not in classified:
             continue
         colours = classified[face.notation]
         faces[face.notation] = {
             "centre_colour": face.colour,
             "orientation": face.orientation,
             "colours": [colours[row * 3 : row * 3 + 3] for row in range(3)],
-            "samples": [asdict(sample) for sample in samples],
+            "samples": [asdict(sample) for sample in samples] if samples else [],
+            "inferred": samples is None,
         }
 
     return {
         "format_version": 1,
         "captured_at": datetime.now(timezone.utc).isoformat(),
         "face_order": [face.notation for face in FACE_SEQUENCE],
-        "complete": len(captured) == 6,
+        "complete": len(classified) == 6,
+        "captured_faces": list(captured),
+        "inferred_faces": [face for face in classified if face not in captured],
         "colour_counts": counts,
         "colour_count_valid": valid,
         "validation_problems": problems,
@@ -435,21 +562,29 @@ def build_state(captured: dict[str, list[SampleResult]]) -> dict[str, object]:
 
 def build_scan_outcome(
     captured: dict[str, list[SampleResult]],
+    infer_bottom: bool = False,
 ) -> ScanOutcome | None:
     """Return a solver handoff only after all existing scan checks pass."""
-    state = build_state(captured)
+    state = build_state(captured, infer_bottom=infer_bottom)
     facelets = state["facelets_URFDLB"]
     if not state["colour_count_valid"] or not isinstance(facelets, str):
         return None
     return ScanOutcome(facelets_urfdlb=facelets)
 
 
-def save_state(captured: dict[str, list[SampleResult]], output_dir: Path) -> Path:
+def save_state(
+    captured: dict[str, list[SampleResult]],
+    output_dir: Path,
+    infer_bottom: bool = False,
+) -> Path:
     """Atomically save raw samples and classified colours as JSON."""
     output_dir.mkdir(parents=True, exist_ok=True)
     destination = output_dir / "cube_state.json"
     temporary = output_dir / "cube_state.json.tmp"
-    temporary.write_text(json.dumps(build_state(captured), indent=2), encoding="utf-8")
+    temporary.write_text(
+        json.dumps(build_state(captured, infer_bottom=infer_bottom), indent=2),
+        encoding="utf-8",
+    )
     temporary.replace(destination)
     return destination
 
@@ -572,6 +707,30 @@ def draw_angled_status(
                   (0, 0, 0), -1)
     cv2.putText(frame, footer, (10, FRAME_HEIGHT - 12),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.43, (255, 255, 255), 1,
+                cv2.LINE_AA)
+
+
+def draw_bottom_status(
+    frame: np.ndarray,
+    captured: dict[str, list[SampleResult]],
+    message: str,
+) -> None:
+    cv2.rectangle(frame, (0, 0), (FRAME_WIDTH, 72), (0, 0, 0), -1)
+    cv2.putText(
+        frame, "Fallback: YELLOW face toward camera, GREEN edge at TOP",
+        (12, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (255, 255, 255), 2,
+        cv2.LINE_AA,
+    )
+    cv2.putText(frame, message, (12, 56), cv2.FONT_HERSHEY_SIMPLEX, 0.45,
+                (100, 230, 255), 1, cv2.LINE_AA)
+    footer = (
+        f"Saved: {' '.join(captured) or '-'} | SPACE capture D | B rescan ORANGE | "
+        "R reset | Q quit"
+    )
+    cv2.rectangle(frame, (0, FRAME_HEIGHT - 34), (FRAME_WIDTH, FRAME_HEIGHT),
+                  (0, 0, 0), -1)
+    cv2.putText(frame, footer, (10, FRAME_HEIGHT - 12),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1,
                 cv2.LINE_AA)
 
 
@@ -707,15 +866,14 @@ def run_scanner(
 def run_angled_scanner(
     camera: Camera,
     output_dir: Path,
+    validate_outcome: Callable[[ScanOutcome], None] | None = None,
+    exit_on_valid: bool = True,
     controls: ScannerControls | None = None,
-) -> dict[str, list[SampleResult]] | None:
-    """Capture U+F, then R, B, L from four above-cube camera views.
-
-    This is an experimental capture-only workflow. D is intentionally absent,
-    so the resulting state is not handed to the solver.
-    """
+) -> ScanOutcome | None:
+    """Capture four angled views, inferring D or requesting a fallback scan."""
     captured: dict[str, list[SampleResult]] = {}
     stage_index = 0
+    bottom_required = False
     message = "Align both faces with the guides, then press SPACE"
     last_preview = 0.0
     side_preview: list[str] | None = None
@@ -727,24 +885,31 @@ def run_angled_scanner(
         while True:
             frame = camera.read()
             now = time.monotonic()
-            if now - last_preview >= 0.15:
-                live_side, _ = sample_angled_face(frame, ANGLED_FRONT_QUAD)
-                live_top, _ = sample_angled_face(frame, ANGLED_TOP_QUAD)
-                references = centre_references(captured)
-                side_preview = classify_samples(live_side, references)
-                top_preview = classify_samples(live_top, references)
-                last_preview = now
             display_frame = frame.copy()
-            draw_perspective_grid(
-                display_frame, ANGLED_TOP_QUAD, "U", DISPLAY_BGR["white"],
-                top_preview,
-            )
-            side = ANGLED_SIDE_SEQUENCE[stage_index]
-            draw_perspective_grid(
-                display_frame, ANGLED_FRONT_QUAD, side.notation,
-                DISPLAY_BGR[side.colour], side_preview,
-            )
-            draw_angled_status(display_frame, stage_index, captured, message)
+            references = centre_references(captured)
+            if bottom_required:
+                if now - last_preview >= 0.15:
+                    side_preview = classify_samples(sample_grid(frame), references)
+                    last_preview = now
+                draw_grid(display_frame, side_preview)
+                draw_bottom_status(display_frame, captured, message)
+            else:
+                if now - last_preview >= 0.15:
+                    live_side, _ = sample_angled_face(frame, ANGLED_FRONT_QUAD)
+                    live_top, _ = sample_angled_face(frame, ANGLED_TOP_QUAD)
+                    side_preview = classify_samples(live_side, references)
+                    top_preview = classify_samples(live_top, references)
+                    last_preview = now
+                side = ANGLED_SIDE_SEQUENCE[stage_index]
+                draw_perspective_grid(
+                    display_frame, ANGLED_TOP_QUAD, "U", DISPLAY_BGR["white"],
+                    top_preview,
+                )
+                draw_perspective_grid(
+                    display_frame, ANGLED_FRONT_QUAD, side.notation,
+                    DISPLAY_BGR[side.colour], side_preview,
+                )
+                draw_angled_status(display_frame, stage_index, captured, message)
             cv2.imshow("Rubik's Cube Angled Scanner", display_frame)
             key = cv2.waitKey(1) & 0xFF
             joystick_action = (
@@ -756,11 +921,19 @@ def run_angled_scanner(
             if key == ord("r") or joystick_action == "reset":
                 captured.clear()
                 stage_index = 0
+                bottom_required = False
                 message = "Scan reset; align GREEN front and WHITE top"
                 if controls is not None:
                     controls.show_status("scanning", "F+U")
             elif key == ord("b") or joystick_action == "back":
-                if stage_index > 0:
+                if bottom_required:
+                    bottom_required = False
+                    stage_index = len(ANGLED_SIDE_SEQUENCE) - 1
+                    captured.pop("D", None)
+                    captured.pop("L", None)
+                    save_state(captured, output_dir)
+                    message = "Rescan ORANGE front, keep WHITE top"
+                elif stage_index > 0:
                     stage_index -= 1
                     removed = ANGLED_SIDE_SEQUENCE[stage_index]
                     captured.pop(removed.notation, None)
@@ -773,6 +946,38 @@ def run_angled_scanner(
                     if controls is not None:
                         controls.show_status("scanning", removed.notation)
             elif key == ord(" ") or joystick_action == "capture":
+                if bottom_required:
+                    captured["D"] = sample_grid(frame)
+                    output_dir.mkdir(parents=True, exist_ok=True)
+                    cv2.imwrite(str(output_dir / "face_D.jpg"), frame)
+                    state_path = save_state(captured, output_dir)
+                    outcome = build_scan_outcome(captured)
+                    if outcome is None:
+                        captured.pop("D", None)
+                        save_state(captured, output_dir)
+                        message = "Yellow scan has invalid colour counts; rescan it or press B"
+                        if controls is not None:
+                            controls.show_status("error")
+                        continue
+                    try:
+                        if validate_outcome is not None:
+                            if controls is not None:
+                                controls.show_status("calculating")
+                            validate_outcome(outcome)
+                    except ValueError as exc:
+                        captured.pop("D", None)
+                        save_state(captured, output_dir)
+                        message = f"Invalid cube: {exc}; rescan YELLOW or press B"
+                        if controls is not None:
+                            controls.show_status("error")
+                        continue
+                    print("Angled capture complete with a scanned D fallback.")
+                    print(f"Saved state: {state_path}")
+                    if controls is not None:
+                        controls.show_status("complete")
+                    return outcome
+
+                side = ANGLED_SIDE_SEQUENCE[stage_index]
                 side_samples, side_image = sample_angled_face(
                     frame, ANGLED_FRONT_QUAD
                 )
@@ -791,22 +996,42 @@ def run_angled_scanner(
                     str(output_dir / f"capture_{stage_index + 1}_{side.colour}.jpg"),
                     frame,
                 )
-                state_path = save_state(captured, output_dir)
+                final_stage = stage_index == len(ANGLED_SIDE_SEQUENCE) - 1
+                state_path = save_state(
+                    captured, output_dir, infer_bottom=final_stage
+                )
                 stage_index += 1
                 if controls is not None:
                     controls.show_status("accepted", side.notation)
 
                 if stage_index == len(ANGLED_SIDE_SEQUENCE):
-                    state = build_state(captured)
+                    state = build_state(captured, infer_bottom=True)
+                    outcome = build_scan_outcome(captured, infer_bottom=True)
                     print(json.dumps(state, indent=2))
-                    print(
-                        "Angled capture complete: U, F, R, B, L saved; "
-                        "D is intentionally not scanned."
-                    )
+                    if outcome is None:
+                        bottom_required = True
+                        message = "D is not uniquely inferable; scan YELLOW with GREEN at top"
+                        save_state(captured, output_dir)
+                        if controls is not None:
+                            controls.show_status("scanning", "D")
+                        continue
+                    try:
+                        if validate_outcome is not None:
+                            if controls is not None:
+                                controls.show_status("calculating")
+                            validate_outcome(outcome)
+                    except ValueError as exc:
+                        message = f"Inference rejected ({exc}); scan YELLOW with GREEN at top"
+                        bottom_required = True
+                        save_state(captured, output_dir)
+                        if controls is not None:
+                            controls.show_status("scanning", "D")
+                        continue
+                    print("Angled capture complete: D inferred from U, F, R, B, L.")
                     print(f"Saved state: {state_path}")
                     if controls is not None:
                         controls.show_status("complete")
-                    return captured
+                    return outcome
 
                 next_side = ANGLED_SIDE_SEQUENCE[stage_index]
                 message = (
@@ -825,8 +1050,17 @@ def scan_cube(
     output_dir: Path,
     validate_outcome: Callable[[ScanOutcome], None],
     controls: ScannerControls | None = None,
+    mode: str = "angled-sides",
 ) -> ScanOutcome | None:
     """Scan until a valid cube is accepted or the user cancels."""
+    if mode == "angled-sides":
+        return run_angled_scanner(
+            camera,
+            output_dir,
+            validate_outcome=validate_outcome,
+            exit_on_valid=True,
+            controls=controls,
+        )
     return run_scanner(
         camera,
         output_dir,
@@ -841,10 +1075,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--mode",
         choices=("head-on", "angled-sides"),
-        default="head-on",
+        default="angled-sides",
         help=(
-            "head-on scans all six faces; angled-sides captures U+F, then R, B, "
-            "L and intentionally leaves D missing"
+            "angled-sides captures U+F, then R, B, L and infers D; head-on scans "
+            "all six faces"
         ),
     )
     parser.add_argument(

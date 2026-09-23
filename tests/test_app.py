@@ -23,6 +23,7 @@ class ApplicationTerminalTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.database = Path(self.temporary.name) / "history.db"
         self.arguments = argparse.Namespace(
+            scan_mode="angled-sides",
             backend="auto",
             device=0,
             output=Path(self.temporary.name) / "scan",
@@ -47,7 +48,7 @@ class ApplicationTerminalTests(unittest.TestCase):
         )
 
     def test_complete_run_is_recorded(self) -> None:
-        def solved_scan(_camera, _output, validator, _controls):
+        def solved_scan(_camera, _output, validator, _controls, **_kwargs):
             outcome = ScanOutcome(SOLVED_STATE)
             validator(outcome)
             return outcome

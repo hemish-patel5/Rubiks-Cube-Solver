@@ -22,6 +22,10 @@ COLOUR_BGR = {
     "blue": (220, 60, 20),
 }
 
+AMBIGUOUS_BOTTOM_STATE = (
+    "BRBUUDUDFRLLBRFBFRRRDBFDFRUDURFDDULDLBFRLLLULUFDLBBBUF"
+)
+
 
 def sample(colour: str, row: int, column: int) -> face_scan.SampleResult:
     bgr = COLOUR_BGR[colour]
@@ -84,19 +88,27 @@ class FaceScannerTests(unittest.TestCase):
     def test_angled_scanner_captures_white_once_then_green_red_blue_orange(self) -> None:
         class FakeCamera:
             closed = False
+            frame_number = 0
 
             def read(self) -> np.ndarray:
-                return np.zeros(
+                frame = np.zeros(
                     (face_scan.FRAME_HEIGHT, face_scan.FRAME_WIDTH, 3), np.uint8
                 )
+                frame[0, 0, 0] = self.frame_number
+                self.frame_number += 1
+                return frame
 
             def close(self) -> None:
                 self.closed = True
 
         camera = FakeCamera()
-        dummy_samples = [sample("white", index // 3, index % 3) for index in range(9)]
-        def capture(_frame, quad):
-            return dummy_samples, np.zeros(
+        def capture(frame, quad):
+            if quad == face_scan.ANGLED_TOP_QUAD:
+                colour = "white"
+            else:
+                colour = ("green", "red", "blue", "orange")[int(frame[0, 0, 0])]
+            samples = [sample(colour, index // 3, index % 3) for index in range(9)]
+            return samples, np.zeros(
                 (face_scan.FACE_SIZE, face_scan.FACE_SIZE, 3), np.uint8
             )
 
@@ -109,21 +121,89 @@ class FaceScannerTests(unittest.TestCase):
         ), mock.patch.object(face_scan.cv2, "imwrite", return_value=True) as imwrite, mock.patch.object(
             face_scan.cv2, "destroyAllWindows"
         ), mock.patch("builtins.print"):
-            captured = face_scan.run_angled_scanner(camera, Path(directory))
+            outcome = face_scan.run_angled_scanner(camera, Path(directory))
             state = json.loads(
                 (Path(directory) / "cube_state.json").read_text(encoding="utf-8")
             )
 
-        self.assertEqual(list(captured or {}), ["F", "U", "R", "B", "L"])
+        self.assertIsNotNone(outcome)
+        self.assertEqual(outcome.facelets_urfdlb, "".join(face * 9 for face in "URFDLB"))
         saved_names = [Path(call.args[0]).name for call in imwrite.call_args_list]
         self.assertEqual(saved_names.count("face_U.jpg"), 1)
         self.assertEqual(
             [name for name in saved_names if name.startswith("face_")],
             ["face_F.jpg", "face_U.jpg", "face_R.jpg", "face_B.jpg", "face_L.jpg"],
         )
-        self.assertEqual(set(state["faces"]), {"U", "F", "R", "B", "L"})
-        self.assertFalse(state["complete"])
-        self.assertIn("not all six faces have been captured", state["validation_problems"])
+        self.assertEqual(set(state["faces"]), {"U", "R", "F", "D", "L", "B"})
+        self.assertTrue(state["complete"])
+        self.assertEqual(state["captured_faces"], ["F", "U", "R", "B", "L"])
+        self.assertEqual(state["inferred_faces"], ["D"])
+        self.assertTrue(state["faces"]["D"]["inferred"])
+        self.assertTrue(camera.closed)
+
+    def test_angled_scanner_requests_yellow_when_bottom_is_ambiguous(self) -> None:
+        class FakeCamera:
+            closed = False
+            frame_number = 0
+
+            def read(self) -> np.ndarray:
+                frame = np.zeros(
+                    (face_scan.FRAME_HEIGHT, face_scan.FRAME_WIDTH, 3), np.uint8
+                )
+                frame[0, 0, 0] = self.frame_number
+                self.frame_number += 1
+                return frame
+
+            def close(self) -> None:
+                self.closed = True
+
+        notation_to_colour = {
+            face.notation: face.colour for face in face_scan.FACE_SEQUENCE
+        }
+        face_colours = {
+            notation: [
+                notation_to_colour[value]
+                for value in AMBIGUOUS_BOTTOM_STATE[index * 9 : index * 9 + 9]
+            ]
+            for index, notation in enumerate("URFDLB")
+        }
+
+        def samples(notation):
+            return [
+                sample(colour, index // 3, index % 3)
+                for index, colour in enumerate(face_colours[notation])
+            ]
+
+        def capture(frame, quad):
+            notation = "U" if quad == face_scan.ANGLED_TOP_QUAD else (
+                "F", "R", "B", "L"
+            )[int(frame[0, 0, 0])]
+            return samples(notation), np.zeros(
+                (face_scan.FACE_SIZE, face_scan.FACE_SIZE, 3), np.uint8
+            )
+
+        camera = FakeCamera()
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(
+            face_scan, "sample_angled_face", side_effect=capture
+        ), mock.patch.object(
+            face_scan, "sample_grid", return_value=samples("D")
+        ), mock.patch.object(face_scan, "draw_perspective_grid"), mock.patch.object(
+            face_scan, "draw_angled_status"
+        ), mock.patch.object(face_scan, "draw_grid"), mock.patch.object(
+            face_scan, "draw_bottom_status"
+        ), mock.patch.object(face_scan.cv2, "imshow"), mock.patch.object(
+            face_scan.cv2, "waitKey", side_effect=[ord(" ")] * 5
+        ), mock.patch.object(face_scan.cv2, "imwrite", return_value=True), mock.patch.object(
+            face_scan.cv2, "destroyAllWindows"
+        ), mock.patch("builtins.print"):
+            outcome = face_scan.run_angled_scanner(camera, Path(directory))
+            state = json.loads(
+                (Path(directory) / "cube_state.json").read_text(encoding="utf-8")
+            )
+
+        self.assertEqual(outcome.facelets_urfdlb, AMBIGUOUS_BOTTOM_STATE)
+        self.assertEqual(state["inferred_faces"], [])
+        self.assertFalse(state["faces"]["D"]["inferred"])
         self.assertTrue(camera.closed)
 
     def test_centre_calibration_classifies_solved_cube(self) -> None:
@@ -241,7 +321,7 @@ class FaceScannerTests(unittest.TestCase):
             face_scan.cv2, "destroyAllWindows"
         ):
             outcome = face_scan.scan_cube(
-                camera, Path(directory), reject, FakeControls()
+                camera, Path(directory), reject, FakeControls(), mode="head-on"
             )
             saved = json.loads(
                 (Path(directory) / "cube_state.json").read_text(encoding="utf-8")

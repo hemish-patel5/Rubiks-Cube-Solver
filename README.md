@@ -39,8 +39,8 @@ The system will:
 ### Current
 
 - Live camera preview using a USB webcam or Raspberry Pi camera
-- Guided scanning of all six 3x3 faces
-- Per-session colour calibration from the six centre stickers
+- Four-position angled scanning with physical bottom-face reconstruction and fallback
+- Per-session colour calibration from visible centre stickers
 - Colour-count validation and a solver-ready URFDLB facelet string
 - Incremental JSON storage of colours, raw BGR/HSV samples, and face images
 - Kociemba 1.2.1 physical-state validation and 3x3 solutions
@@ -89,13 +89,13 @@ solver. Use the keyboard controls shown in the preview:
 - `R` clears the current scan.
 - `Q` closes the scanner.
 
-### Experimental angled side scanner
+### Angled scanner
 
-To test the above-cube view while keeping the existing six-face scanner intact:
+The default scanner uses an above-cube view:
 
 ```bash
 python src/vision/face_scan.py --mode angled-sides --backend opencv --device 0 \
-  --output angled_scan
+  --output scan_output
 ```
 
 Keep white on top throughout. The four camera positions are green, red, blue,
@@ -105,9 +105,13 @@ and `F`. The next three presses save `R`, `B`, and `L`. Each face is perspective
 corrected into a square `face_*.jpg`, while `capture_*.jpg` retains the original
 camera view.
 
-This mode deliberately does not scan the yellow `D` face. Its JSON therefore
-reports an incomplete cube and is intended for capture testing only; use the
-default `head-on` mode for solving until bottom-face inference is implemented.
+After the fourth position, the scanner reconstructs the hidden yellow `D` face
+from the remaining physical edge and corner cubies and verifies candidate states
+with Kociemba. Some cube states have more than one physically valid hidden face;
+five visible faces cannot distinguish them. In that case the GUI asks for one
+head-on yellow scan with green at the top. This fallback prevents the solver from
+using an arbitrary completion. The original workflow remains available with
+`--mode head-on`.
 
 Each capture is stored immediately in `scan_output/cube_state.json`, along with
 `face_U.jpg` through `face_B.jpg`. The JSON contains the 3x3 colour matrix and raw
@@ -132,13 +136,14 @@ colour-count and physical-state validation remain required before solving.
 Use the full command to scan, validate, solve, guide, and record one run:
 
 ```powershell
-python src/app.py --backend auto --device 0 --output scan_output --database data/solve_history.db
+python src/app.py --scan-mode angled-sides --backend auto --device 0 \
+  --output scan_output --database data/solve_history.db
 ```
 
-The scanner retains the existing OpenCV window, grid, face sequence, orientation
-prompts, photographs, and `cube_state.json`. A colour-balanced but physically
-impossible cube is reported in that same window so `B` or `R` can be used to
-rescan. A solved cube produces zero moves.
+The main application defaults to angled scanning, physical validation, solving,
+and guidance. `cube_state.json` records `captured_faces`, `inferred_faces`, and
+whether each face was inferred. A colour-balanced but physically impossible cube
+is rejected so it can be rescanned. A solved cube produces zero moves.
 
 Keyboard guidance uses `SPACE` or `N` for next, `B` for back, and `Q` to cancel.
 Sense HAT controls are:
