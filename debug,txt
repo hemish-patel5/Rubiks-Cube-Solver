@@ -1,0 +1,22 @@
+--Test API keys and URL:
+echo "URL: ${RUBIKS_SYNC_URL:-NOT SET}"
+test -n "$RUBIKS_SYNC_API_KEY" && echo "API key: SET" || echo "API key: NOT SET"
+
+
+
+
+--manually engage database
+PYTHONPATH=src python3 - <<'PY'
+from pathlib import Path
+from storage.history import SolveHistory
+from storage.sync import HttpSummaryUploader, retry_pending
+
+history = SolveHistory(Path("data/solve_history.db"))
+uploader = HttpSummaryUploader.from_environment()
+
+if uploader is None:
+    raise SystemExit("Sync URL or API key is not set")
+
+attempted, uploaded = retry_pending(history, uploader)
+print(f"Attempted: {attempted}, uploaded: {uploaded}")
+PY
