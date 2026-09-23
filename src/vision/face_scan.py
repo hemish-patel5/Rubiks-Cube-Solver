@@ -56,6 +56,12 @@ FRAME_WIDTH = 640
 FRAME_HEIGHT = 480
 FACE_SIZE = 270
 
+# Experimental two-face view. Points are top-left, top-right, bottom-right,
+# bottom-left in the 640x480 camera frame. The shared edge keeps the white top
+# and current side aligned like a physical cube viewed from slightly above.
+ANGLED_TOP_QUAD = ((235, 95), (405, 95), (475, 235), (165, 235))
+ANGLED_FRONT_QUAD = ((165, 235), (475, 235), (450, 435), (190, 435))
+
 # Singmaster/Kociemba order.  These instructions preserve sticker orientation,
 # not just face colour, so the saved facelet string can later be sent to a solver.
 FACE_SEQUENCE = (
@@ -65,6 +71,13 @@ FACE_SEQUENCE = (
     FaceDefinition("D", "yellow", "green face at the TOP"),
     FaceDefinition("L", "orange", "white face at the TOP"),
     FaceDefinition("B", "blue", "white face at the TOP"),
+)
+
+ANGLED_SIDE_SEQUENCE = (
+    FaceDefinition("F", "green", "white face visible above"),
+    FaceDefinition("R", "red", "white face visible above"),
+    FaceDefinition("B", "blue", "white face visible above"),
+    FaceDefinition("L", "orange", "white face visible above"),
 )
 
 DISPLAY_BGR = {
@@ -209,6 +222,61 @@ def sample_grid(frame: np.ndarray) -> list[SampleResult]:
             )
         )
     return results
+
+
+def rectify_face(
+    frame: np.ndarray,
+    quad: tuple[tuple[int, int], tuple[int, int], tuple[int, int], tuple[int, int]],
+) -> np.ndarray:
+    """Perspective-correct one angled face into a square image."""
+    source = np.asarray(quad, dtype=np.float32)
+    destination = np.asarray(
+        ((0, 0), (FACE_SIZE - 1, 0), (FACE_SIZE - 1, FACE_SIZE - 1),
+         (0, FACE_SIZE - 1)),
+        dtype=np.float32,
+    )
+    transform = cv2.getPerspectiveTransform(source, destination)
+    return cv2.warpPerspective(frame, transform, (FACE_SIZE, FACE_SIZE))
+
+
+def sample_rectified_face(face_image: np.ndarray) -> list[SampleResult]:
+    """Sample a perspective-corrected FACE_SIZE square as a 3x3 face."""
+    if face_image.shape[:2] != (FACE_SIZE, FACE_SIZE):
+        raise ValueError(f"Expected a {FACE_SIZE}x{FACE_SIZE} rectified face")
+    hsv_image = cv2.cvtColor(face_image, cv2.COLOR_BGR2HSV)
+    cell_size = FACE_SIZE // GRID_SIZE
+    half = SAMPLE_SIZE // 2
+    results: list[SampleResult] = []
+    for row in range(GRID_SIZE):
+        for column in range(GRID_SIZE):
+            centre_x = column * cell_size + cell_size // 2
+            centre_y = row * cell_size + cell_size // 2
+            bgr_region = face_image[
+                centre_y - half : centre_y + half,
+                centre_x - half : centre_x + half,
+            ]
+            hsv_region = hsv_image[
+                centre_y - half : centre_y + half,
+                centre_x - half : centre_x + half,
+            ]
+            median_bgr = np.median(bgr_region.reshape(-1, 3), axis=0).astype(int)
+            median_hsv = np.median(hsv_region.reshape(-1, 3), axis=0).astype(int)
+            results.append(SampleResult(
+                row=row,
+                column=column,
+                bgr=tuple(int(value) for value in median_bgr),
+                hsv=tuple(int(value) for value in median_hsv),
+            ))
+    return results
+
+
+def sample_angled_face(
+    frame: np.ndarray,
+    quad: tuple[tuple[int, int], tuple[int, int], tuple[int, int], tuple[int, int]],
+) -> tuple[list[SampleResult], np.ndarray]:
+    """Return samples and a saved square image for one angled face."""
+    rectified = rectify_face(frame, quad)
+    return sample_rectified_face(rectified), rectified
 
 
 def bgr_to_lab(bgr: tuple[int, int, int]) -> np.ndarray:
@@ -429,6 +497,84 @@ def draw_grid(
         )
 
 
+def draw_perspective_grid(
+    frame: np.ndarray,
+    quad: tuple[tuple[int, int], tuple[int, int], tuple[int, int], tuple[int, int]],
+    label: str,
+    colour: tuple[int, int, int],
+    preview_colours: list[str] | None = None,
+) -> None:
+    """Draw a labelled 3x3 guide over a perspective face quadrilateral."""
+    points = np.asarray(quad, dtype=np.int32)
+    cv2.polylines(frame, [points], True, colour, 2, cv2.LINE_AA)
+    top_left, top_right, bottom_right, bottom_left = np.asarray(quad, dtype=float)
+    for index in range(1, GRID_SIZE):
+        fraction = index / GRID_SIZE
+        upper = top_left + fraction * (top_right - top_left)
+        lower = bottom_left + fraction * (bottom_right - bottom_left)
+        left = top_left + fraction * (bottom_left - top_left)
+        right = top_right + fraction * (bottom_right - top_right)
+        cv2.line(frame, tuple(upper.astype(int)), tuple(lower.astype(int)), colour, 1,
+                 cv2.LINE_AA)
+        cv2.line(frame, tuple(left.astype(int)), tuple(right.astype(int)), colour, 1,
+                 cv2.LINE_AA)
+    if preview_colours is None:
+        centre = points.mean(axis=0).astype(int)
+        cv2.putText(frame, label, (int(centre[0]) - 12, int(centre[1]) + 8),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, colour, 2, cv2.LINE_AA)
+        return
+
+    destination_centres = np.asarray([[
+        ((column + 0.5) * FACE_SIZE / GRID_SIZE,
+         (row + 0.5) * FACE_SIZE / GRID_SIZE)
+        for row in range(GRID_SIZE) for column in range(GRID_SIZE)
+    ]], dtype=np.float32)
+    destination_corners = np.asarray(
+        ((0, 0), (FACE_SIZE - 1, 0), (FACE_SIZE - 1, FACE_SIZE - 1),
+         (0, FACE_SIZE - 1)), dtype=np.float32,
+    )
+    inverse = cv2.getPerspectiveTransform(
+        destination_corners, np.asarray(quad, dtype=np.float32)
+    )
+    camera_centres = cv2.perspectiveTransform(destination_centres, inverse)[0]
+    for centre, colour_name in zip(camera_centres, preview_colours):
+        x, y = (int(value) for value in centre)
+        draw_colour = DISPLAY_BGR.get(colour_name, DISPLAY_BGR["unknown"])
+        cv2.circle(frame, (x, y), 12, draw_colour, 3, cv2.LINE_AA)
+        cv2.putText(
+            frame, colour_name[0].upper(), (x - 6, y + 6),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+            (0, 0, 0) if colour_name in {"white", "yellow"} else (255, 255, 255),
+            2, cv2.LINE_AA,
+        )
+
+
+def draw_angled_status(
+    frame: np.ndarray,
+    stage_index: int,
+    captured: dict[str, list[SampleResult]],
+    message: str,
+) -> None:
+    side = ANGLED_SIDE_SEQUENCE[stage_index]
+    cv2.rectangle(frame, (0, 0), (FRAME_WIDTH, 72), (0, 0, 0), -1)
+    heading = (
+        f"Angled {stage_index + 1}/4: {side.colour.upper()} front, WHITE top"
+    )
+    cv2.putText(frame, heading, (12, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
+                (255, 255, 255), 2, cv2.LINE_AA)
+    cv2.putText(frame, message, (12, 56), cv2.FONT_HERSHEY_SIMPLEX, 0.45,
+                (100, 230, 255), 1, cv2.LINE_AA)
+    footer = (
+        f"Saved: {' '.join(captured) or '-'} | SPACE capture | B back | "
+        "R reset | Q quit"
+    )
+    cv2.rectangle(frame, (0, FRAME_HEIGHT - 34), (FRAME_WIDTH, FRAME_HEIGHT),
+                  (0, 0, 0), -1)
+    cv2.putText(frame, footer, (10, FRAME_HEIGHT - 12),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.43, (255, 255, 255), 1,
+                cv2.LINE_AA)
+
+
 def draw_status(
     frame: np.ndarray,
     face_index: int,
@@ -558,6 +704,122 @@ def run_scanner(
         cv2.destroyAllWindows()
 
 
+def run_angled_scanner(
+    camera: Camera,
+    output_dir: Path,
+    controls: ScannerControls | None = None,
+) -> dict[str, list[SampleResult]] | None:
+    """Capture U+F, then R, B, L from four above-cube camera views.
+
+    This is an experimental capture-only workflow. D is intentionally absent,
+    so the resulting state is not handed to the solver.
+    """
+    captured: dict[str, list[SampleResult]] = {}
+    stage_index = 0
+    message = "Align both faces with the guides, then press SPACE"
+    last_preview = 0.0
+    side_preview: list[str] | None = None
+    top_preview: list[str] | None = None
+    if controls is not None:
+        controls.show_status("scanning", "F+U")
+
+    try:
+        while True:
+            frame = camera.read()
+            now = time.monotonic()
+            if now - last_preview >= 0.15:
+                live_side, _ = sample_angled_face(frame, ANGLED_FRONT_QUAD)
+                live_top, _ = sample_angled_face(frame, ANGLED_TOP_QUAD)
+                references = centre_references(captured)
+                side_preview = classify_samples(live_side, references)
+                top_preview = classify_samples(live_top, references)
+                last_preview = now
+            display_frame = frame.copy()
+            draw_perspective_grid(
+                display_frame, ANGLED_TOP_QUAD, "U", DISPLAY_BGR["white"],
+                top_preview,
+            )
+            side = ANGLED_SIDE_SEQUENCE[stage_index]
+            draw_perspective_grid(
+                display_frame, ANGLED_FRONT_QUAD, side.notation,
+                DISPLAY_BGR[side.colour], side_preview,
+            )
+            draw_angled_status(display_frame, stage_index, captured, message)
+            cv2.imshow("Rubik's Cube Angled Scanner", display_frame)
+            key = cv2.waitKey(1) & 0xFF
+            joystick_action = (
+                controls.poll_scanner_action() if controls is not None else None
+            )
+
+            if key == ord("q") or joystick_action == "cancel":
+                return None
+            if key == ord("r") or joystick_action == "reset":
+                captured.clear()
+                stage_index = 0
+                message = "Scan reset; align GREEN front and WHITE top"
+                if controls is not None:
+                    controls.show_status("scanning", "F+U")
+            elif key == ord("b") or joystick_action == "back":
+                if stage_index > 0:
+                    stage_index -= 1
+                    removed = ANGLED_SIDE_SEQUENCE[stage_index]
+                    captured.pop(removed.notation, None)
+                    for later in ANGLED_SIDE_SEQUENCE[stage_index + 1 :]:
+                        captured.pop(later.notation, None)
+                    if stage_index == 0:
+                        captured.pop("U", None)
+                    save_state(captured, output_dir)
+                    message = f"Rescan {removed.colour.upper()} front"
+                    if controls is not None:
+                        controls.show_status("scanning", removed.notation)
+            elif key == ord(" ") or joystick_action == "capture":
+                side_samples, side_image = sample_angled_face(
+                    frame, ANGLED_FRONT_QUAD
+                )
+                captured[side.notation] = side_samples
+                output_dir.mkdir(parents=True, exist_ok=True)
+                cv2.imwrite(str(output_dir / f"face_{side.notation}.jpg"), side_image)
+
+                if stage_index == 0:
+                    top_samples, top_image = sample_angled_face(
+                        frame, ANGLED_TOP_QUAD
+                    )
+                    captured["U"] = top_samples
+                    cv2.imwrite(str(output_dir / "face_U.jpg"), top_image)
+
+                cv2.imwrite(
+                    str(output_dir / f"capture_{stage_index + 1}_{side.colour}.jpg"),
+                    frame,
+                )
+                state_path = save_state(captured, output_dir)
+                stage_index += 1
+                if controls is not None:
+                    controls.show_status("accepted", side.notation)
+
+                if stage_index == len(ANGLED_SIDE_SEQUENCE):
+                    state = build_state(captured)
+                    print(json.dumps(state, indent=2))
+                    print(
+                        "Angled capture complete: U, F, R, B, L saved; "
+                        "D is intentionally not scanned."
+                    )
+                    print(f"Saved state: {state_path}")
+                    if controls is not None:
+                        controls.show_status("complete")
+                    return captured
+
+                next_side = ANGLED_SIDE_SEQUENCE[stage_index]
+                message = (
+                    f"Saved {side.notation}; rotate cube to "
+                    f"{next_side.colour.upper()} front, keep WHITE top"
+                )
+                if controls is not None:
+                    controls.show_status("scanning", next_side.notation)
+    finally:
+        camera.close()
+        cv2.destroyAllWindows()
+
+
 def scan_cube(
     camera: Camera,
     output_dir: Path,
@@ -576,6 +838,15 @@ def scan_cube(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--mode",
+        choices=("head-on", "angled-sides"),
+        default="head-on",
+        help=(
+            "head-on scans all six faces; angled-sides captures U+F, then R, B, "
+            "L and intentionally leaves D missing"
+        ),
+    )
     parser.add_argument(
         "--backend",
         choices=("auto", "opencv", "picamera2"),
@@ -607,7 +878,10 @@ def main() -> None:
     except RuntimeError as exc:
         controls.show_status("error")
         raise SystemExit(f"Camera error: {exc}") from exc
-    run_scanner(camera, args.output, controls=controls)
+    if args.mode == "angled-sides":
+        run_angled_scanner(camera, args.output, controls=controls)
+    else:
+        run_scanner(camera, args.output, controls=controls)
 
 
 if __name__ == "__main__":

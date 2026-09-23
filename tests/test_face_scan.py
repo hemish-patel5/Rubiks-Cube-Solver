@@ -48,6 +48,84 @@ class FaceScannerTests(unittest.TestCase):
         self.assertEqual(len(results), 9)
         self.assertEqual(results[7].bgr, (7, 8, 9))
 
+    def test_angled_face_is_rectified_and_sampled_in_row_order(self) -> None:
+        square = np.zeros((face_scan.FACE_SIZE, face_scan.FACE_SIZE, 3), np.uint8)
+        expected = []
+        cell_size = face_scan.FACE_SIZE // 3
+        for index in range(9):
+            colour = (20 + index, 70 + index, 120 + index)
+            expected.append(colour)
+            row, column = divmod(index, 3)
+            square[
+                row * cell_size : (row + 1) * cell_size,
+                column * cell_size : (column + 1) * cell_size,
+            ] = colour
+        destination = np.asarray(
+            ((0, 0), (face_scan.FACE_SIZE - 1, 0),
+             (face_scan.FACE_SIZE - 1, face_scan.FACE_SIZE - 1),
+             (0, face_scan.FACE_SIZE - 1)),
+            dtype=np.float32,
+        )
+        source = np.asarray(face_scan.ANGLED_TOP_QUAD, dtype=np.float32)
+        transform = cv2.getPerspectiveTransform(destination, source)
+        frame = cv2.warpPerspective(
+            square, transform, (face_scan.FRAME_WIDTH, face_scan.FRAME_HEIGHT)
+        )
+        samples, rectified = face_scan.sample_angled_face(
+            frame, face_scan.ANGLED_TOP_QUAD
+        )
+        self.assertEqual(rectified.shape[:2], (face_scan.FACE_SIZE, face_scan.FACE_SIZE))
+        for result, colour in zip(samples, expected):
+            self.assertTrue(
+                np.allclose(result.bgr, colour, atol=2),
+                (result.row, result.column, result.bgr, colour),
+            )
+
+    def test_angled_scanner_captures_white_once_then_green_red_blue_orange(self) -> None:
+        class FakeCamera:
+            closed = False
+
+            def read(self) -> np.ndarray:
+                return np.zeros(
+                    (face_scan.FRAME_HEIGHT, face_scan.FRAME_WIDTH, 3), np.uint8
+                )
+
+            def close(self) -> None:
+                self.closed = True
+
+        camera = FakeCamera()
+        dummy_samples = [sample("white", index // 3, index % 3) for index in range(9)]
+        def capture(_frame, quad):
+            return dummy_samples, np.zeros(
+                (face_scan.FACE_SIZE, face_scan.FACE_SIZE, 3), np.uint8
+            )
+
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(
+            face_scan, "sample_angled_face", side_effect=capture
+        ), mock.patch.object(face_scan, "draw_perspective_grid"), mock.patch.object(
+            face_scan, "draw_angled_status"
+        ), mock.patch.object(face_scan.cv2, "imshow"), mock.patch.object(
+            face_scan.cv2, "waitKey", side_effect=[ord(" ")] * 4
+        ), mock.patch.object(face_scan.cv2, "imwrite", return_value=True) as imwrite, mock.patch.object(
+            face_scan.cv2, "destroyAllWindows"
+        ), mock.patch("builtins.print"):
+            captured = face_scan.run_angled_scanner(camera, Path(directory))
+            state = json.loads(
+                (Path(directory) / "cube_state.json").read_text(encoding="utf-8")
+            )
+
+        self.assertEqual(list(captured or {}), ["F", "U", "R", "B", "L"])
+        saved_names = [Path(call.args[0]).name for call in imwrite.call_args_list]
+        self.assertEqual(saved_names.count("face_U.jpg"), 1)
+        self.assertEqual(
+            [name for name in saved_names if name.startswith("face_")],
+            ["face_F.jpg", "face_U.jpg", "face_R.jpg", "face_B.jpg", "face_L.jpg"],
+        )
+        self.assertEqual(set(state["faces"]), {"U", "F", "R", "B", "L"})
+        self.assertFalse(state["complete"])
+        self.assertIn("not all six faces have been captured", state["validation_problems"])
+        self.assertTrue(camera.closed)
+
     def test_centre_calibration_classifies_solved_cube(self) -> None:
         captured = solved_cube_samples()
         classified = face_scan.classify_cube(captured)

@@ -89,6 +89,26 @@ solver. Use the keyboard controls shown in the preview:
 - `R` clears the current scan.
 - `Q` closes the scanner.
 
+### Experimental angled side scanner
+
+To test the above-cube view while keeping the existing six-face scanner intact:
+
+```bash
+python src/vision/face_scan.py --mode angled-sides --backend opencv --device 0 \
+  --output angled_scan
+```
+
+Keep white on top throughout. The four camera positions are green, red, blue,
+then orange facing forward. At the first position, align both the white top and
+green front with their perspective guides; one press of `SPACE` saves both `U`
+and `F`. The next three presses save `R`, `B`, and `L`. Each face is perspective
+corrected into a square `face_*.jpg`, while `capture_*.jpg` retains the original
+camera view.
+
+This mode deliberately does not scan the yellow `D` face. Its JSON therefore
+reports an incomplete cube and is intended for capture testing only; use the
+default `head-on` mode for solving until bottom-face inference is implemented.
+
 Each capture is stored immediately in `scan_output/cube_state.json`, along with
 `face_U.jpg` through `face_B.jpg`. The JSON contains the 3x3 colour matrix and raw
 BGR/HSV values for every sticker. After face six it also contains a 54-character
