@@ -1,0 +1,631 @@
+{
+  "format_version": 1,
+  "captured_at": "2026-09-17T03:53:23.768048+00:00",
+  "face_order": [
+    "U",
+    "R",
+    "F",
+    "D",
+    "L",
+    "B"
+  ],
+  "complete": false,
+  "colour_counts": {
+    "white": 21,
+    "red": 1,
+    "green": 1,
+    "yellow": 1,
+    "orange": 0,
+    "blue": 0,
+    "unknown": 12
+  },
+  "colour_count_valid": false,
+  "validation_problems": [
+    "not all six faces have been captured",
+    "white: detected 21, expected 9",
+    "red: detected 1, expected 9",
+    "green: detected 1, expected 9",
+    "yellow: detected 1, expected 9",
+    "orange: detected 0, expected 9",
+    "blue: detected 0, expected 9"
+  ],
+  "facelets_URFDLB": null,
+  "faces": {
+    "U": {
+      "centre_colour": "white",
+      "orientation": "blue face at the TOP",
+      "colours": [
+        [
+          "unknown",
+          "white",
+          "white"
+        ],
+        [
+          "unknown",
+          "white",
+          "white"
+        ],
+        [
+          "unknown",
+          "white",
+          "white"
+        ]
+      ],
+      "samples": [
+        {
+          "row": 0,
+          "column": 0,
+          "bgr": [
+            21,
+            17,
+            15
+          ],
+          "hsv": [
+            104,
+            66,
+            21
+          ]
+        },
+        {
+          "row": 0,
+          "column": 1,
+          "bgr": [
+            226,
+            224,
+            221
+          ],
+          "hsv": [
+            90,
+            6,
+            226
+          ]
+        },
+        {
+          "row": 0,
+          "column": 2,
+          "bgr": [
+            171,
+            175,
+            170
+          ],
+          "hsv": [
+            66,
+            7,
+            175
+          ]
+        },
+        {
+          "row": 1,
+          "column": 0,
+          "bgr": [
+            25,
+            21,
+            18
+          ],
+          "hsv": [
+            105,
+            67,
+            25
+          ]
+        },
+        {
+          "row": 1,
+          "column": 1,
+          "bgr": [
+            141,
+            144,
+            143
+          ],
+          "hsv": [
+            36,
+            6,
+            144
+          ]
+        },
+        {
+          "row": 1,
+          "column": 2,
+          "bgr": [
+            112,
+            122,
+            123
+          ],
+          "hsv": [
+            30,
+            24,
+            123
+          ]
+        },
+        {
+          "row": 2,
+          "column": 0,
+          "bgr": [
+            5,
+            4,
+            5
+          ],
+          "hsv": [
+            24,
+            92,
+            6
+          ]
+        },
+        {
+          "row": 2,
+          "column": 1,
+          "bgr": [
+            53,
+            55,
+            50
+          ],
+          "hsv": [
+            66,
+            12,
+            55
+          ]
+        },
+        {
+          "row": 2,
+          "column": 2,
+          "bgr": [
+            141,
+            146,
+            139
+          ],
+          "hsv": [
+            66,
+            9,
+            146
+          ]
+        }
+      ]
+    },
+    "R": {
+      "centre_colour": "red",
+      "orientation": "white face at the TOP",
+      "colours": [
+        [
+          "unknown",
+          "white",
+          "white"
+        ],
+        [
+          "unknown",
+          "red",
+          "white"
+        ],
+        [
+          "unknown",
+          "white",
+          "white"
+        ]
+      ],
+      "samples": [
+        {
+          "row": 0,
+          "column": 0,
+          "bgr": [
+            17,
+            12,
+            11
+          ],
+          "hsv": [
+            108,
+            73,
+            17
+          ]
+        },
+        {
+          "row": 0,
+          "column": 1,
+          "bgr": [
+            226,
+            224,
+            219
+          ],
+          "hsv": [
+            90,
+            6,
+            226
+          ]
+        },
+        {
+          "row": 0,
+          "column": 2,
+          "bgr": [
+            171,
+            175,
+            170
+          ],
+          "hsv": [
+            66,
+            7,
+            175
+          ]
+        },
+        {
+          "row": 1,
+          "column": 0,
+          "bgr": [
+            23,
+            17,
+            15
+          ],
+          "hsv": [
+            110,
+            77,
+            23
+          ]
+        },
+        {
+          "row": 1,
+          "column": 1,
+          "bgr": [
+            141,
+            144,
+            143
+          ],
+          "hsv": [
+            36,
+            7,
+            144
+          ]
+        },
+        {
+          "row": 1,
+          "column": 2,
+          "bgr": [
+            112,
+            123,
+            123
+          ],
+          "hsv": [
+            30,
+            24,
+            123
+          ]
+        },
+        {
+          "row": 2,
+          "column": 0,
+          "bgr": [
+            8,
+            6,
+            5
+          ],
+          "hsv": [
+            45,
+            73,
+            8
+          ]
+        },
+        {
+          "row": 2,
+          "column": 1,
+          "bgr": [
+            54,
+            58,
+            54
+          ],
+          "hsv": [
+            66,
+            16,
+            58
+          ]
+        },
+        {
+          "row": 2,
+          "column": 2,
+          "bgr": [
+            141,
+            145,
+            138
+          ],
+          "hsv": [
+            66,
+            10,
+            146
+          ]
+        }
+      ]
+    },
+    "F": {
+      "centre_colour": "green",
+      "orientation": "white face at the TOP",
+      "colours": [
+        [
+          "unknown",
+          "white",
+          "white"
+        ],
+        [
+          "unknown",
+          "green",
+          "white"
+        ],
+        [
+          "unknown",
+          "white",
+          "white"
+        ]
+      ],
+      "samples": [
+        {
+          "row": 0,
+          "column": 0,
+          "bgr": [
+            14,
+            10,
+            9
+          ],
+          "hsv": [
+            114,
+            81,
+            14
+          ]
+        },
+        {
+          "row": 0,
+          "column": 1,
+          "bgr": [
+            226,
+            224,
+            219
+          ],
+          "hsv": [
+            90,
+            6,
+            226
+          ]
+        },
+        {
+          "row": 0,
+          "column": 2,
+          "bgr": [
+            171,
+            175,
+            170
+          ],
+          "hsv": [
+            60,
+            7,
+            175
+          ]
+        },
+        {
+          "row": 1,
+          "column": 0,
+          "bgr": [
+            20,
+            16,
+            14
+          ],
+          "hsv": [
+            110,
+            79,
+            20
+          ]
+        },
+        {
+          "row": 1,
+          "column": 1,
+          "bgr": [
+            141,
+            144,
+            143
+          ],
+          "hsv": [
+            36,
+            6,
+            144
+          ]
+        },
+        {
+          "row": 1,
+          "column": 2,
+          "bgr": [
+            111,
+            122,
+            123
+          ],
+          "hsv": [
+            30,
+            24,
+            123
+          ]
+        },
+        {
+          "row": 2,
+          "column": 0,
+          "bgr": [
+            9,
+            7,
+            7
+          ],
+          "hsv": [
+            75,
+            69,
+            9
+          ]
+        },
+        {
+          "row": 2,
+          "column": 1,
+          "bgr": [
+            58,
+            61,
+            53
+          ],
+          "hsv": [
+            66,
+            15,
+            61
+          ]
+        },
+        {
+          "row": 2,
+          "column": 2,
+          "bgr": [
+            144,
+            146,
+            140
+          ],
+          "hsv": [
+            66,
+            10,
+            147
+          ]
+        }
+      ]
+    },
+    "D": {
+      "centre_colour": "yellow",
+      "orientation": "green face at the TOP",
+      "colours": [
+        [
+          "unknown",
+          "white",
+          "white"
+        ],
+        [
+          "unknown",
+          "yellow",
+          "white"
+        ],
+        [
+          "unknown",
+          "white",
+          "white"
+        ]
+      ],
+      "samples": [
+        {
+          "row": 0,
+          "column": 0,
+          "bgr": [
+            13,
+            9,
+            8
+          ],
+          "hsv": [
+            112,
+            96,
+            13
+          ]
+        },
+        {
+          "row": 0,
+          "column": 1,
+          "bgr": [
+            228,
+            225,
+            221
+          ],
+          "hsv": [
+            90,
+            6,
+            228
+          ]
+        },
+        {
+          "row": 0,
+          "column": 2,
+          "bgr": [
+            170,
+            175,
+            170
+          ],
+          "hsv": [
+            66,
+            7,
+            175
+          ]
+        },
+        {
+          "row": 1,
+          "column": 0,
+          "bgr": [
+            19,
+            14,
+            14
+          ],
+          "hsv": [
+            110,
+            71,
+            19
+          ]
+        },
+        {
+          "row": 1,
+          "column": 1,
+          "bgr": [
+            140,
+            144,
+            143
+          ],
+          "hsv": [
+            36,
+            7,
+            144
+          ]
+        },
+        {
+          "row": 1,
+          "column": 2,
+          "bgr": [
+            111,
+            123,
+            123
+          ],
+          "hsv": [
+            30,
+            24,
+            123
+          ]
+        },
+        {
+          "row": 2,
+          "column": 0,
+          "bgr": [
+            9,
+            6,
+            6
+          ],
+          "hsv": [
+            45,
+            96,
+            10
+          ]
+        },
+        {
+          "row": 2,
+          "column": 1,
+          "bgr": [
+            62,
+            66,
+            63
+          ],
+          "hsv": [
+            60,
+            9,
+            66
+          ]
+        },
+        {
+          "row": 2,
+          "column": 2,
+          "bgr": [
+            148,
+            150,
+            144
+          ],
+          "hsv": [
+            66,
+            11,
+            153
+          ]
+        }
+      ]
+    }
+  }
+}

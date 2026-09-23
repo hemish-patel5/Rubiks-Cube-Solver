@@ -1,43 +1,147 @@
-cd ~/Desktop/rubiksrepo
-source .venv/bin/activate
-source config.sh
+URL: http://127.0.0.1/rubiks/api/sessions.php
+API key: SET
+Pending: 8
+HTTP: 403
+Response: <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html><head>
+<meta type="copyright" content="Copyright (C) 1996-2021 The Squid Software Foundation and contributors">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<title>ERROR: The requested URL could not be retrieved</title>
+<style type="text/css"><!--
+ /*
+ * Copyright (C) 1996-2020 The Squid Software Foundation and contributors
+ *
+ * Squid software is distributed under GPLv2+ license and includes
+ * contributions from numerous individuals and organizations.
+ * Please see the COPYING and CONTRIBUTORS files for details.
+ */
 
-PYTHONPATH=src python3 - <<'PY'
-import json
-import os
-from pathlib import Path
-from urllib import request, error
-from storage.history import SolveHistory
-from storage.sync import build_summary_payload
+/*
+ Stylesheet for Squid Error pages
+ Adapted from design by Free CSS Templates
+ http://www.freecsstemplates.org
+ Released for free under a Creative Commons Attribution 2.5 License
+*/
 
-url = os.environ.get("RUBIKS_SYNC_URL")
-key = os.environ.get("RUBIKS_SYNC_API_KEY")
-pending = SolveHistory(Path("data/solve_history.db")).pending()
+/* Page basics */
+* {
+	font-family: verdana, sans-serif;
+}
 
-print("URL:", url or "NOT SET")
-print("API key:", "SET" if key else "NOT SET")
-print("Pending:", len(pending))
+html body {
+	margin: 0;
+	padding: 0;
+	background: #efefef;
+	font-size: 12px;
+	color: #1e1e1e;
+}
 
-if not url or not key or not pending:
-    raise SystemExit()
+/* Page displayed title area */
+#titles {
+	margin-left: 15px;
+	padding: 10px;
+	padding-left: 100px;
+	background: url('/squid-internal-static/icons/SN.png') no-repeat left;
+}
 
-req = request.Request(
-    url,
-    data=json.dumps(build_summary_payload(pending[0])).encode(),
-    method="POST",
-    headers={
-        "Content-Type": "application/json",
-        "X-API-Key": key,
-    },
-)
+/* initial title */
+#titles h1 {
+	color: #000000;
+}
+#titles h2 {
+	color: #000000;
+}
 
-try:
-    with request.urlopen(req, timeout=10) as response:
-        print("HTTP:", response.status)
-        print("Response:", response.read().decode())
-except error.HTTPError as exc:
-    print("HTTP:", exc.code)
-    print("Response:", exc.read().decode())
-except error.URLError as exc:
-    print("Connection error:", exc.reason)
-PY
+/* special event: FTP success page titles */
+#titles ftpsuccess {
+	background-color:#00ff00;
+	width:100%;
+}
+
+/* Page displayed body content area */
+#content {
+	padding: 10px;
+	background: #ffffff;
+}
+
+/* General text */
+p {
+}
+
+/* error brief description */
+#error p {
+}
+
+/* some data which may have caused the problem */
+#data {
+}
+
+/* the error message received from the system or other software */
+#sysmsg {
+}
+
+pre {
+}
+
+/* special event: FTP / Gopher directory listing */
+#dirmsg {
+    font-family: courier, monospace;
+    color: black;
+    font-size: 10pt;
+}
+#dirlisting {
+    margin-left: 2%;
+    margin-right: 2%;
+}
+#dirlisting tr.entry td.icon,td.filename,td.size,td.date {
+    border-bottom: groove;
+}
+#dirlisting td.size {
+    width: 50px;
+    text-align: right;
+    padding-right: 5px;
+}
+
+/* horizontal lines */
+hr {
+	margin: 0;
+}
+
+/* page displayed footer area */
+#footer {
+	font-size: 9px;
+	padding-left: 10px;
+}
+
+
+body
+:lang(fa) { direction: rtl; font-size: 100%; font-family: Tahoma, Roya, sans-serif; float: right; }
+:lang(he) { direction: rtl; }
+ --></style>
+</head><body id="ERR_ACCESS_DENIED">
+<div id="titles">
+<h1>ERROR</h1>
+<h2>The requested URL could not be retrieved</h2>
+</div>
+<hr>
+
+<div id="content">
+<p>The following error was encountered while trying to retrieve the URL: <a href="http://127.0.0.1/rubiks/api/sessions.php">http://127.0.0.1/rubiks/api/sessions.php</a></p>
+
+<blockquote id="error">
+<p><b>Access Denied.</b></p>
+</blockquote>
+
+<p>Access control configuration prevents your request from being allowed at this time. Please contact your service provider if you feel this is incorrect.</p>
+
+<p>Your cache administrator is <a href="mailto:webmaster?subject=CacheErrorInfo%20-%20ERR_ACCESS_DENIED&amp;body=CacheHost%3A%20panthea-odc.aut.ac.nz%0D%0AErrPage%3A%20ERR_ACCESS_DENIED%0D%0AErr%3A%20%5Bnone%5D%0D%0ATimeStamp%3A%20Wed,%2023%20Sep%202026%2021%3A44%3A29%20GMT%0D%0A%0D%0AClientIP%3A%2010.62.134.118%0D%0A%0D%0AHTTP%20Request%3A%0D%0APOST%20%2Frubiks%2Fapi%2Fsessions.php%20HTTP%2F1.1%0AAccept-Encoding%3A%20identity%0D%0AContent-Length%3A%20288%0D%0AUser-Agent%3A%20Python-urllib%2F3.13%0D%0AContent-Type%3A%20application%2Fjson%0D%0AX-Api-Key%3A%20986f42023fe3769e3af61ae02715a495fc47af0fb652614f93721bd01dc3c309%0D%0AConnection%3A%20close%0D%0AHost%3A%20127.0.0.1%0D%0A%0D%0A%0D%0A">webmaster</a>.</p>
+<br>
+</div>
+
+<hr>
+<div id="footer">
+<p>Generated Wed, 23 Sep 2026 21:44:29 GMT by panthea-odc.aut.ac.nz (squid/4.14)</p>
+<!-- ERR_ACCESS_DENIED -->
+</div>
+</body></html>
+
