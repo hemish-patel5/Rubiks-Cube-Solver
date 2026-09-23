@@ -1,34 +1,43 @@
---Test API keys and URL:
-echo "URL: ${RUBIKS_SYNC_URL:-NOT SET}"
-test -n "$RUBIKS_SYNC_API_KEY" && echo "API key: SET" || echo "API key: NOT SET"
+cd ~/Desktop/rubiksrepo
+source .venv/bin/activate
+source config.sh
 
-
-
-
---manually engage database
 PYTHONPATH=src python3 - <<'PY'
+import json
+import os
 from pathlib import Path
+from urllib import request, error
 from storage.history import SolveHistory
-from storage.sync import HttpSummaryUploader, retry_pending
+from storage.sync import build_summary_payload
 
-history = SolveHistory(Path("data/solve_history.db"))
-uploader = HttpSummaryUploader.from_environment()
+url = os.environ.get("RUBIKS_SYNC_URL")
+key = os.environ.get("RUBIKS_SYNC_API_KEY")
+pending = SolveHistory(Path("data/solve_history.db")).pending()
 
-if uploader is None:
-    raise SystemExit("Sync URL or API key is not set")
+print("URL:", url or "NOT SET")
+print("API key:", "SET" if key else "NOT SET")
+print("Pending:", len(pending))
 
-attempted, uploaded = retry_pending(history, uploader)
-print(f"Attempted: {attempted}, uploaded: {uploaded}")
-PY
+if not url or not key or not pending:
+    raise SystemExit()
 
+req = request.Request(
+    url,
+    data=json.dumps(build_summary_payload(pending[0])).encode(),
+    method="POST",
+    headers={
+        "Content-Type": "application/json",
+        "X-API-Key": key,
+    },
+)
 
-python3 - <<'PY'
-import sqlite3
-
-with sqlite3.connect("data/solve_history.db") as db:
-    pending = db.execute(
-        "SELECT COUNT(*) FROM solve_runs WHERE synced = 0"
-    ).fetchone()[0]
-
-print("Pending records:", pending)
+try:
+    with request.urlopen(req, timeout=10) as response:
+        print("HTTP:", response.status)
+        print("Response:", response.read().decode())
+except error.HTTPError as exc:
+    print("HTTP:", exc.code)
+    print("Response:", exc.read().decode())
+except error.URLError as exc:
+    print("Connection error:", exc.reason)
 PY
