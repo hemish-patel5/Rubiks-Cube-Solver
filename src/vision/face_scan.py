@@ -57,11 +57,11 @@ FRAME_WIDTH = 640
 FRAME_HEIGHT = 480
 FACE_SIZE = 270
 
-# Experimental two-face view. Points are top-left, top-right, bottom-right,
-# bottom-left in the 640x480 camera frame. The shared edge keeps the white top
-# and current side aligned like a physical cube viewed from slightly above.
-ANGLED_TOP_QUAD = ((235, 95), (405, 95), (475, 235), (165, 235))
-ANGLED_FRONT_QUAD = ((165, 235), (475, 235), (450, 435), (190, 435))
+# Two-face guide fitted to the 640x480 webcam captures. Points are top-left,
+# top-right, bottom-right, bottom-left. Both faces share the cube's horizontal
+# edge so the guide follows the visible sticker boundaries in the angled view.
+ANGLED_TOP_QUAD = ((197, 100), (430, 100), (453, 238), (167, 238))
+ANGLED_FRONT_QUAD = ((167, 238), (453, 238), (434, 428), (200, 428))
 
 # Singmaster/Kociemba order.  These instructions preserve sticker orientation,
 # not just face colour, so the saved facelet string can later be sent to a solver.
