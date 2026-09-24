@@ -1,6 +1,6 @@
 {
   "format_version": 1,
-  "captured_at": "2026-09-23T22:39:45.019856+00:00",
+  "captured_at": "2026-09-24T01:44:36.443465+00:00",
   "face_order": [
     "U",
     "R",
@@ -9,41 +9,47 @@
     "L",
     "B"
   ],
-  "complete": false,
+  "complete": true,
+  "captured_faces": [
+    "F",
+    "U",
+    "R",
+    "B",
+    "L"
+  ],
+  "inferred_faces": [
+    "D"
+  ],
   "colour_counts": {
-    "white": 5,
+    "white": 9,
     "red": 9,
     "green": 9,
-    "yellow": 4,
+    "yellow": 9,
     "orange": 9,
     "blue": 9
   },
-  "colour_count_valid": false,
-  "validation_problems": [
-    "not all six faces have been captured",
-    "white: detected 5, expected 9",
-    "yellow: detected 4, expected 9"
-  ],
-  "facelets_URFDLB": null,
+  "colour_count_valid": true,
+  "validation_problems": [],
+  "facelets_URFDLB": "RRRBUFBLLFUBLRBBUUDUDLFDDRLBFUUDBDBLFLRDLFRRLUDURBFFDF",
   "faces": {
     "U": {
       "centre_colour": "white",
       "orientation": "blue face at the TOP",
       "colours": [
         [
-          "white",
-          "yellow",
-          "white"
+          "red",
+          "red",
+          "red"
         ],
         [
-          "yellow",
+          "blue",
           "white",
-          "yellow"
+          "green"
         ],
         [
-          "white",
-          "yellow",
-          "white"
+          "blue",
+          "orange",
+          "orange"
         ]
       ],
       "samples": [
@@ -51,148 +57,149 @@
           "row": 0,
           "column": 0,
           "bgr": [
-            167,
-            179,
-            172
+            75,
+            86,
+            177
           ],
           "hsv": [
-            50,
-            18,
-            179
+            3,
+            146,
+            177
           ]
         },
         {
           "row": 0,
           "column": 1,
           "bgr": [
-            62,
-            178,
-            180
+            73,
+            88,
+            184
           ],
           "hsv": [
-            29,
-            167,
-            180
+            4,
+            152,
+            184
           ]
         },
         {
           "row": 0,
           "column": 2,
           "bgr": [
-            169,
-            189,
-            182
+            73,
+            87,
+            181
           ],
           "hsv": [
-            39,
-            27,
-            189
+            4,
+            150,
+            181
           ]
         },
         {
           "row": 1,
           "column": 0,
           "bgr": [
-            78,
-            166,
-            167
+            150,
+            86,
+            49
           ],
           "hsv": [
-            29,
-            120,
-            167
+            109,
+            161,
+            150
           ]
         },
         {
           "row": 1,
           "column": 1,
           "bgr": [
-            182,
-            192,
-            187
-          ],
-          "hsv": [
-            42,
-            13,
-            192
-          ]
-        },
-        {
-          "row": 1,
-          "column": 2,
-          "bgr": [
-            52,
-            183,
-            189
-          ],
-          "hsv": [
-            29,
-            185,
-            189
-          ]
-        },
-        {
-          "row": 2,
-          "column": 0,
-          "bgr": [
-            81,
-            92,
-            91
+            167,
+            176,
+            175
           ],
           "hsv": [
             30,
-            22,
-            92
+            14,
+            176
+          ]
+        },
+        {
+          "row": 1,
+          "column": 2,
+          "bgr": [
+            80,
+            128,
+            76
+          ],
+          "hsv": [
+            62,
+            102,
+            128
+          ]
+        },
+        {
+          "row": 2,
+          "column": 0,
+          "bgr": [
+            155,
+            82,
+            33
+          ],
+          "hsv": [
+            108,
+            199,
+            155
           ]
         },
         {
           "row": 2,
           "column": 1,
           "bgr": [
-            42,
-            147,
-            150
+            37,
+            138,
+            218
           ],
           "hsv": [
-            28,
-            137,
-            150
+            17,
+            212,
+            218
           ]
         },
         {
           "row": 2,
           "column": 2,
           "bgr": [
-            168,
-            183,
-            178
+            10,
+            135,
+            217
           ],
           "hsv": [
-            34,
-            24,
-            183
+            18,
+            243,
+            217
           ]
         }
-      ]
+      ],
+      "inferred": false
     },
     "R": {
       "centre_colour": "red",
       "orientation": "white face at the TOP",
       "colours": [
         [
-          "red",
-          "orange",
-          "red"
+          "green",
+          "white",
+          "blue"
         ],
         [
           "orange",
           "red",
-          "orange"
+          "blue"
         ],
         [
-          "red",
-          "orange",
-          "red"
+          "blue",
+          "white",
+          "white"
         ]
       ],
       "samples": [
@@ -200,148 +207,149 @@
           "row": 0,
           "column": 0,
           "bgr": [
-            55,
-            68,
-            141
+            67,
+            111,
+            65
           ],
           "hsv": [
-            4,
-            156,
-            141
+            61,
+            106,
+            111
           ]
         },
         {
           "row": 0,
           "column": 1,
           "bgr": [
-            39,
-            115,
-            165
+            160,
+            172,
+            170
           ],
           "hsv": [
+            35,
             18,
-            195,
-            165
+            172
           ]
         },
         {
           "row": 0,
           "column": 2,
           "bgr": [
-            59,
-            74,
-            148
+            121,
+            71,
+            29
+          ],
+          "hsv": [
+            106,
+            193,
+            121
+          ]
+        },
+        {
+          "row": 1,
+          "column": 0,
+          "bgr": [
+            36,
+            113,
+            165
+          ],
+          "hsv": [
+            18,
+            199,
+            165
+          ]
+        },
+        {
+          "row": 1,
+          "column": 1,
+          "bgr": [
+            50,
+            68,
+            155
           ],
           "hsv": [
             5,
-            153,
-            148
-          ]
-        },
-        {
-          "row": 1,
-          "column": 0,
-          "bgr": [
-            51,
-            115,
-            159
-          ],
-          "hsv": [
-            18,
-            173,
-            159
-          ]
-        },
-        {
-          "row": 1,
-          "column": 1,
-          "bgr": [
-            57,
-            75,
-            147
-          ],
-          "hsv": [
-            6,
-            155,
-            147
+            172,
+            155
           ]
         },
         {
           "row": 1,
           "column": 2,
           "bgr": [
-            53,
-            121,
-            168
+            127,
+            81,
+            42
           ],
           "hsv": [
-            18,
-            176,
-            168
-          ]
-        },
-        {
-          "row": 2,
-          "column": 0,
-          "bgr": [
-            54,
-            71,
-            130
-          ],
-          "hsv": [
-            7,
-            148,
-            130
-          ]
-        },
-        {
-          "row": 2,
-          "column": 1,
-          "bgr": [
-            34,
             106,
-            148
+            171,
+            127
+          ]
+        },
+        {
+          "row": 2,
+          "column": 0,
+          "bgr": [
+            119,
+            83,
+            50
           ],
           "hsv": [
-            19,
-            196,
-            148
+            106,
+            148,
+            119
+          ]
+        },
+        {
+          "row": 2,
+          "column": 1,
+          "bgr": [
+            154,
+            173,
+            171
+          ],
+          "hsv": [
+            35,
+            28,
+            173
           ]
         },
         {
           "row": 2,
           "column": 2,
           "bgr": [
-            46,
-            65,
-            123
+            159,
+            175,
+            170
           ],
           "hsv": [
-            8,
-            163,
-            124
+            38,
+            22,
+            175
           ]
         }
-      ]
+      ],
+      "inferred": false
     },
     "F": {
       "centre_colour": "green",
       "orientation": "white face at the TOP",
       "colours": [
         [
-          "green",
-          "blue",
-          "green"
+          "yellow",
+          "white",
+          "yellow"
         ],
         [
-          "blue",
+          "orange",
           "green",
-          "blue"
+          "yellow"
         ],
         [
-          "green",
-          "blue",
-          "green"
+          "yellow",
+          "red",
+          "orange"
         ]
       ],
       "samples": [
@@ -349,146 +357,170 @@
           "row": 0,
           "column": 0,
           "bgr": [
-            64,
-            102,
-            59
+            54,
+            158,
+            164
           ],
           "hsv": [
-            63,
-            104,
-            102
+            28,
+            171,
+            164
           ]
         },
         {
           "row": 0,
           "column": 1,
           "bgr": [
-            115,
-            70,
-            41
+            155,
+            165,
+            166
           ],
           "hsv": [
-            108,
-            163,
-            115
+            27,
+            16,
+            166
           ]
         },
         {
           "row": 0,
           "column": 2,
           "bgr": [
-            68,
-            110,
-            66
-          ],
-          "hsv": [
-            61,
-            101,
-            110
-          ]
-        },
-        {
-          "row": 1,
-          "column": 0,
-          "bgr": [
-            112,
-            72,
-            42
-          ],
-          "hsv": [
-            107,
+            37,
             159,
-            112
+            167
+          ],
+          "hsv": [
+            28,
+            198,
+            167
+          ]
+        },
+        {
+          "row": 1,
+          "column": 0,
+          "bgr": [
+            43,
+            114,
+            164
+          ],
+          "hsv": [
+            18,
+            188,
+            164
           ]
         },
         {
           "row": 1,
           "column": 1,
           "bgr": [
-            66,
-            107,
-            62
+            65,
+            109,
+            65
           ],
           "hsv": [
-            62,
-            108,
-            107
+            60,
+            103,
+            109
           ]
         },
         {
           "row": 1,
           "column": 2,
           "bgr": [
-            120,
-            77,
-            45
+            55,
+            160,
+            166
           ],
           "hsv": [
-            107,
-            160,
-            120
+            29,
+            171,
+            166
           ]
         },
         {
           "row": 2,
           "column": 0,
           "bgr": [
-            63,
-            99,
-            59
+            62,
+            157,
+            161
           ],
           "hsv": [
-            63,
-            104,
-            99
+            29,
+            157,
+            161
           ]
         },
         {
           "row": 2,
           "column": 1,
           "bgr": [
-            104,
-            64,
-            33
+            54,
+            76,
+            143
           ],
           "hsv": [
-            107,
-            176,
-            104
+            8,
+            159,
+            143
           ]
         },
         {
           "row": 2,
           "column": 2,
           "bgr": [
-            56,
-            96,
-            51
+            43,
+            117,
+            162
           ],
           "hsv": [
-            62,
-            118,
-            96
+            19,
+            188,
+            162
           ]
         }
-      ]
+      ],
+      "inferred": false
+    },
+    "D": {
+      "centre_colour": "yellow",
+      "orientation": "green face at the TOP",
+      "colours": [
+        [
+          "blue",
+          "green",
+          "white"
+        ],
+        [
+          "white",
+          "yellow",
+          "blue"
+        ],
+        [
+          "yellow",
+          "blue",
+          "orange"
+        ]
+      ],
+      "samples": [],
+      "inferred": true
     },
     "L": {
       "centre_colour": "orange",
       "orientation": "white face at the TOP",
       "colours": [
         [
-          "orange",
-          "red",
-          "orange"
-        ],
-        [
-          "red",
+          "green",
           "orange",
           "red"
         ],
         [
+          "yellow",
           "orange",
+          "green"
+        ],
+        [
+          "red",
           "red",
           "orange"
         ]
@@ -498,148 +530,149 @@
           "row": 0,
           "column": 0,
           "bgr": [
-            35,
-            111,
-            169
-          ],
-          "hsv": [
-            17,
-            202,
-            169
-          ]
-        },
-        {
-          "row": 0,
-          "column": 1,
-          "bgr": [
-            53,
-            65,
-            156
-          ],
-          "hsv": [
-            4,
-            169,
-            156
-          ]
-        },
-        {
-          "row": 0,
-          "column": 2,
-          "bgr": [
-            35,
-            117,
-            175
-          ],
-          "hsv": [
-            17,
-            203,
-            175
-          ]
-        },
-        {
-          "row": 1,
-          "column": 0,
-          "bgr": [
-            61,
             73,
-            150
+            120,
+            71
+          ],
+          "hsv": [
+            61,
+            103,
+            120
+          ]
+        },
+        {
+          "row": 0,
+          "column": 1,
+          "bgr": [
+            7,
+            118,
+            184
+          ],
+          "hsv": [
+            19,
+            245,
+            184
+          ]
+        },
+        {
+          "row": 0,
+          "column": 2,
+          "bgr": [
+            44,
+            60,
+            156
           ],
           "hsv": [
             4,
-            151,
-            150
+            184,
+            156
+          ]
+        },
+        {
+          "row": 1,
+          "column": 0,
+          "bgr": [
+            50,
+            174,
+            181
+          ],
+          "hsv": [
+            28,
+            185,
+            181
           ]
         },
         {
           "row": 1,
           "column": 1,
           "bgr": [
-            39,
-            119,
-            175
+            29,
+            124,
+            187
           ],
           "hsv": [
             18,
-            198,
-            175
+            216,
+            187
           ]
         },
         {
           "row": 1,
           "column": 2,
           "bgr": [
-            61,
-            74,
-            154
+            71,
+            122,
+            73
           ],
           "hsv": [
-            4,
-            153,
-            154
+            59,
+            106,
+            122
           ]
         },
         {
           "row": 2,
           "column": 0,
           "bgr": [
-            42,
-            110,
-            159
-          ],
-          "hsv": [
-            18,
-            188,
-            159
-          ]
-        },
-        {
-          "row": 2,
-          "column": 1,
-          "bgr": [
-            45,
-            65,
-            140
+            60,
+            81,
+            160
           ],
           "hsv": [
             6,
-            173,
-            140
+            159,
+            160
+          ]
+        },
+        {
+          "row": 2,
+          "column": 1,
+          "bgr": [
+            57,
+            80,
+            161
+          ],
+          "hsv": [
+            7,
+            164,
+            161
           ]
         },
         {
           "row": 2,
           "column": 2,
           "bgr": [
-            28,
-            107,
-            157
+            35,
+            124,
+            180
           ],
           "hsv": [
-            18,
-            211,
-            157
+            19,
+            206,
+            180
           ]
         }
-      ]
+      ],
+      "inferred": false
     },
     "B": {
       "centre_colour": "blue",
       "orientation": "white face at the TOP",
       "colours": [
         [
-          "blue",
-          "green",
-          "blue"
+          "white",
+          "yellow",
+          "white"
         ],
         [
-          "green",
+          "red",
           "blue",
           "green"
         ],
         [
-          "blue",
           "green",
-          "blue"
+          "yellow",
+          "green"
         ]
       ],
       "samples": [
@@ -647,129 +680,130 @@
           "row": 0,
           "column": 0,
           "bgr": [
-            116,
-            71,
-            40
+            153,
+            168,
+            165
           ],
           "hsv": [
-            108,
-            167,
-            116
+            36,
+            23,
+            168
           ]
         },
         {
           "row": 0,
           "column": 1,
           "bgr": [
-            69,
-            114,
-            68
+            8,
+            164,
+            172
           ],
           "hsv": [
-            61,
+            29,
+            243,
+            172
+          ]
+        },
+        {
+          "row": 0,
+          "column": 2,
+          "bgr": [
+            154,
+            168,
+            165
+          ],
+          "hsv": [
+            36,
+            23,
+            168
+          ]
+        },
+        {
+          "row": 1,
+          "column": 0,
+          "bgr": [
+            53,
+            69,
+            148
+          ],
+          "hsv": [
+            5,
+            164,
+            148
+          ]
+        },
+        {
+          "row": 1,
+          "column": 1,
+          "bgr": [
+            126,
+            79,
+            40
+          ],
+          "hsv": [
+            106,
+            174,
+            126
+          ]
+        },
+        {
+          "row": 1,
+          "column": 2,
+          "bgr": [
+            67,
+            114,
+            63
+          ],
+          "hsv": [
+            62,
+            114,
+            114
+          ]
+        },
+        {
+          "row": 2,
+          "column": 0,
+          "bgr": [
+            68,
+            114,
+            71
+          ],
+          "hsv": [
+            58,
             103,
             114
           ]
         },
         {
-          "row": 0,
-          "column": 2,
-          "bgr": [
-            127,
-            79,
-            48
-          ],
-          "hsv": [
-            108,
-            159,
-            127
-          ]
-        },
-        {
-          "row": 1,
-          "column": 0,
-          "bgr": [
-            76,
-            113,
-            72
-          ],
-          "hsv": [
-            63,
-            91,
-            113
-          ]
-        },
-        {
-          "row": 1,
-          "column": 1,
-          "bgr": [
-            123,
-            79,
-            48
-          ],
-          "hsv": [
-            108,
-            156,
-            123
-          ]
-        },
-        {
-          "row": 1,
-          "column": 2,
-          "bgr": [
-            74,
-            114,
-            70
-          ],
-          "hsv": [
-            63,
-            100,
-            114
-          ]
-        },
-        {
-          "row": 2,
-          "column": 0,
-          "bgr": [
-            110,
-            72,
-            44
-          ],
-          "hsv": [
-            107,
-            155,
-            110
-          ]
-        },
-        {
           "row": 2,
           "column": 1,
           "bgr": [
-            62,
-            102,
-            61
+            38,
+            163,
+            169
           ],
           "hsv": [
-            61,
-            104,
-            102
+            29,
+            198,
+            169
           ]
         },
         {
           "row": 2,
           "column": 2,
           "bgr": [
-            107,
             68,
-            35
+            115,
+            69
           ],
           "hsv": [
-            106,
-            169,
-            107
+            59,
+            105,
+            115
           ]
         }
-      ]
+      ],
+      "inferred": false
     }
   }
 }
