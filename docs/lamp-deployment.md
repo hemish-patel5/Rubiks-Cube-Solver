@@ -12,7 +12,8 @@ The PHP files require PHP 8.1 or newer with PDO MySQL enabled.
   fields, validation, prepared statements, and idempotent upsert.
 - `web/index.php`: responsive solve summary dashboard with
   session removal, CSRF protection, and pagination.
-- `src/storage/sync.py`: standard-library uploader with a three-second timeout.
+- `src/storage/sync.py`: standard-library uploader with a three-second timeout and
+  one background `remote-sync` worker.
 
 Only terminal summaries are uploaded. Face photographs, BGR/HSV samples,
 calibration evidence, and Raspberry Pi file paths stay local.
@@ -89,9 +90,11 @@ the Pi, can recreate a deleted server record.
 ## Retry behavior
 
 SQLite rows begin with `synced=0`. If both Raspberry Pi sync variables are set,
-the application attempts every pending row once at startup and once after the
-new terminal row is saved. A timeout, HTTP error, invalid response, or server
-failure leaves the row at `synced=0` for the next application run.
+the application starts one daemon worker that checks pending rows immediately,
+whenever a terminal row is saved, and every ten seconds. Uploading therefore does
+not block camera or interface work. Shutdown requests one final pass and waits for
+at most four seconds. A timeout, HTTP error, invalid response, server failure, or
+unfinished shutdown leaves the row at `synced=0` for a later retry.
 
 ## Pending live acceptance
 

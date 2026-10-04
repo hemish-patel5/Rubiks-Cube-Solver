@@ -22,7 +22,8 @@ The system focuses on reliable colour recognition using OpenCV under controlled 
 
 The system will:
 
-- Capture images of all six faces of a Rubik's Cube using a Raspberry Pi camera.
+- Capture four guided angled views covering five faces, with safe reconstruction or a
+  direct scan of the concealed yellow face.
 - Detect and classify the colour of each sticker using OpenCV.
 - Construct and validate a complete digital representation of the cube.
 - Calculate a valid solving sequence using a Rubik's Cube solving algorithm.
@@ -47,6 +48,7 @@ The system will:
 - OpenCV next/back/cancel move guidance
 - Sense HAT LED status and joystick controls with a laptop fallback
 - SQLite terminal history and retryable summary synchronization
+- Background LAMP synchronization that does not block scanning or guidance
 - Plain PHP/MySQL JSON endpoint and responsive dashboard with session removal
 
 ### Planned
@@ -157,10 +159,13 @@ If Sense HAT is unavailable, the application continues with keyboard controls.
 The LED matrix mirrors ready, scanning, accepted, error, calculating, current
 move, and complete states when hardware is present.
 
-Every run writes one `COMPLETE`, `ERROR`, or `CANCELLED` row to SQLite. To enable
-best-effort LAMP synchronization, set `RUBIKS_SYNC_URL` and
-`RUBIKS_SYNC_API_KEY` in the application environment. Pending rows are attempted
-once at startup and once after a terminal row is stored; failures remain pending.
+Every run writes one `COMPLETE`, `ERROR`, or `CANCELLED` row to SQLite before any
+remote attempt. To enable best-effort LAMP synchronization, set `RUBIKS_SYNC_URL`
+and `RUBIKS_SYNC_API_KEY` in the application environment. A `remote-sync` worker
+retries pending rows in the background at startup, when a terminal row is stored,
+and every ten seconds. Network failures cannot block the scanner or discard local
+history. Shutdown allows one final attempt for up to four seconds; unfinished rows
+remain pending for a future run.
 Only allowlisted terminal summaries leave the device—never face images, raw
 BGR/HSV samples, calibration evidence, or local paths. See
 [`docs/lamp-deployment.md`](docs/lamp-deployment.md) for server configuration and
@@ -201,6 +206,7 @@ recreate its server record.
 - MySQL
 - Git & Bitbucket
 - Trello
+- Python multithreading (`Thread`, `Event`, and `Lock`)
 
 ---
 
@@ -258,6 +264,7 @@ rubiks-cube-assistant/
 - [x] Sense HAT adapter with no-hardware fallback
 - [x] SQLite terminal history
 - [x] LAMP code and local security/data contract tests
+- [x] Background LAMP synchronization with bounded shutdown
 - [ ] Raspberry Pi and live LAMP acceptance
 
 ## Phase 6 – Optional Extension
@@ -278,6 +285,7 @@ Current progress:
 - ✅ Existing OpenCV/LAB team scanner preserved
 - ✅ 3x3 solver, move guidance, Sense HAT adapter, and SQLite history implemented
 - ✅ LAMP schema, authenticated write endpoint, and dashboard with session removal implemented
+- ✅ Remote upload/retry isolated from the camera and UI in a tested background thread
 - ⏳ Raspberry Pi camera, Sense HAT, physical solve, and performance acceptance
 - ⏳ Live MySQL migration, HTTPS, authenticated upload/retry, and browser verification
 
@@ -287,6 +295,7 @@ From the repository root:
 
 ```powershell
 python -m unittest discover -s tests -v
+python -m compileall -q src tests
 python src/vision/face_scan.py --help
 python src/app.py --help
 php -l web/api/sessions.php
@@ -294,6 +303,8 @@ php -l web/index.php
 ```
 
 The PHP lint commands require PHP on the development machine or LAMP host.
+The maintained requirements, controlled change, traceability, architecture,
+measurement tables, and demonstration plan are under [`docs/`](docs/).
 
 ---
 

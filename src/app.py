@@ -12,7 +12,7 @@ from cube.solver import solve_3x3
 from hardware.sense_hat_adapter import SenseHatAdapter
 from interface.guidance import show_guidance
 from storage.history import SolveHistory, SolveRecord
-from storage.sync import HttpSummaryUploader, retry_pending
+from storage.sync import HttpSummaryUploader, RemoteSyncWorker
 from vision.face_scan import ScanOutcome, create_camera, scan_cube
 
 
@@ -53,7 +53,9 @@ def main() -> None:
     history = SolveHistory(args.database)
     history.initialize()
     uploader = HttpSummaryUploader.from_environment()
-    retry_pending(history, uploader)
+    sync_worker = RemoteSyncWorker(history, uploader) if uploader else None
+    if sync_worker:
+        sync_worker.start()
 
     session_id = str(uuid.uuid4())
     started_at = datetime.now(timezone.utc).isoformat()
@@ -93,19 +95,23 @@ def main() -> None:
         error_message = str(exc)
         print(f"Application error: {exc}")
     finally:
-        history.record(
-            SolveRecord(
-                session_id=session_id,
-                started_at=started_at,
-                finished_at=datetime.now(timezone.utc).isoformat(),
-                status=terminal_status,
-                facelets_urfdlb=facelets,
-                moves=tuple(moves),
-                solve_duration_seconds=solve_duration_seconds,
-                error_message=error_message,
+        try:
+            history.record(
+                SolveRecord(
+                    session_id=session_id,
+                    started_at=started_at,
+                    finished_at=datetime.now(timezone.utc).isoformat(),
+                    status=terminal_status,
+                    facelets_urfdlb=facelets,
+                    moves=tuple(moves),
+                    solve_duration_seconds=solve_duration_seconds,
+                    error_message=error_message,
+                )
             )
-        )
-        retry_pending(history, uploader)
+        finally:
+            if sync_worker:
+                sync_worker.wake()
+                sync_worker.stop(flush=True, timeout_seconds=4.0)
 
     if terminal_status == "ERROR":
         raise SystemExit(1)
