@@ -23,10 +23,13 @@ class OutputPin(Protocol):
 
 @dataclass(frozen=True)
 class SpinSettings:
-    start_rate: int = 100
-    cruise_rate: int = 1_500
-    acceleration_steps: int = 7_000
-    pulse_high_us: int = 10
+    # Gentle defaults reduce shock loading in the geared platform. They can be
+    # raised with CLI options after the mechanism runs without slipping.
+    start_rate: int = 10
+    cruise_rate: int = 120
+    acceleration_steps: int = 2_000
+    pulse_high_us: int = 100
+    settle_seconds: float = 0.5
 
     def __post_init__(self) -> None:
         if self.start_rate <= 0:
@@ -39,6 +42,8 @@ class SpinSettings:
             raise ValueError("pulse_high_us must be greater than zero")
         if self.pulse_high_us >= 1_000_000 // self.cruise_rate:
             raise ValueError("pulse_high_us must be shorter than the cruise period")
+        if self.settle_seconds < 0:
+            raise ValueError("settle_seconds must not be negative")
 
 
 def step_period_us(acceleration_step: int, settings: SpinSettings) -> int:
@@ -80,7 +85,8 @@ class StepperSpinner:
             self.direction_pin.on()
         else:
             self.direction_pin.off()
-        self.sleep(0.0001)
+        # Give the platform time to stop moving before the acceleration ramp.
+        self.sleep(self.settings.settle_seconds)
 
         try:
             while steps is None or total_steps < steps:
@@ -116,10 +122,16 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dir-pin", type=int, default=BCM_DIR_PIN)
     parser.add_argument("--step-pin", type=int, default=BCM_STEP_PIN)
-    parser.add_argument("--start-rate", type=int, default=100)
-    parser.add_argument("--cruise-rate", type=int, default=1_500)
-    parser.add_argument("--acceleration-steps", type=int, default=7_000)
-    parser.add_argument("--pulse-high-us", type=int, default=10)
+    parser.add_argument("--start-rate", type=int, default=10)
+    parser.add_argument("--cruise-rate", type=int, default=120)
+    parser.add_argument("--acceleration-steps", type=int, default=2_000)
+    parser.add_argument("--pulse-high-us", type=int, default=100)
+    parser.add_argument(
+        "--settle-seconds",
+        type=float,
+        default=0.5,
+        help="pause before stepping so the platform can settle (default: 0.5)",
+    )
     parser.add_argument(
         "--clockwise-level",
         choices=("low", "high"),
@@ -141,6 +153,7 @@ def main() -> None:
         cruise_rate=args.cruise_rate,
         acceleration_steps=args.acceleration_steps,
         pulse_high_us=args.pulse_high_us,
+        settle_seconds=args.settle_seconds,
     )
 
     try:
