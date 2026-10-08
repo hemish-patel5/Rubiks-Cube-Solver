@@ -1,4 +1,4 @@
-"""Continuously spin a STEP/DIR stepper driver from Raspberry Pi GPIO."""
+"""Drive a STEP/DIR rotating platform from Raspberry Pi GPIO."""
 
 from __future__ import annotations
 
@@ -11,6 +11,8 @@ from typing import Callable, Protocol
 BCM_DIR_PIN = 5
 BCM_STEP_PIN = 6
 STEPS_PER_REVOLUTION = 18_000
+# Segment lengths derived from cumulative positions 5450, 9500, 13750, 18000.
+CALIBRATED_QUARTER_STEPS = (5_450, 4_050, 4_250, 4_250)
 
 
 class OutputPin(Protocol):
@@ -112,6 +114,35 @@ class StepperSpinner:
 
         return total_steps
 
+    def spin_quarter_turns(
+        self, pause_seconds: float = 1.0, turns: int | None = None
+    ) -> int:
+        """Repeat calibrated 90-degree moves with a pause after every move."""
+        if pause_seconds < 0:
+            raise ValueError("pause_seconds must not be negative")
+        if turns is not None and turns < 0:
+            raise ValueError("turns must not be negative")
+
+        total_steps = 0
+        turn_index = 0
+        while turns is None or turn_index < turns:
+            segment_steps = CALIBRATED_QUARTER_STEPS[
+                turn_index % len(CALIBRATED_QUARTER_STEPS)
+            ]
+            # Restart the acceleration ramp after each stationary position.
+            total_steps += self.spin(segment_steps)
+            turn_index += 1
+            angle = (turn_index % 4) * 90 or 360
+            print(
+                f"Position: {angle} degrees"
+                f" | completed revolutions: {turn_index // 4}"
+                f" | total pulses: {total_steps}",
+                flush=True,
+            )
+            self.sleep(pause_seconds)
+
+        return total_steps
+
     def close(self) -> None:
         self.step_pin.off()
         self.step_pin.close()
@@ -141,7 +172,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--steps",
         type=int,
-        help="stop after this many pulses; omitted means spin continuously",
+        help="diagnostic: make one movement with this many pulses, then stop",
+    )
+    parser.add_argument(
+        "--continuous",
+        action="store_true",
+        help="spin without quarter-turn pauses (the previous behavior)",
+    )
+    parser.add_argument(
+        "--pause-seconds",
+        type=float,
+        default=1.0,
+        help="pause after each calibrated 90-degree turn (default: 1.0)",
     )
     return parser.parse_args()
 
@@ -172,17 +214,23 @@ def main() -> None:
         clockwise_high=args.clockwise_level == "high",
     )
 
-    print(
-        f"Continuous clockwise rotation: BCM DIR={args.dir_pin}, "
-        f"BCM STEP={args.step_pin}"
-    )
+    print(f"Clockwise rotation: BCM DIR={args.dir_pin}, BCM STEP={args.step_pin}")
     print(
         f"Ramping from {settings.start_rate} to {settings.cruise_rate} "
         f"pulses/s over {settings.acceleration_steps} pulses."
     )
     print("Press Ctrl+C to stop safely.")
     try:
-        spinner.spin(args.steps)
+        if args.steps is not None:
+            spinner.spin(args.steps)
+        elif args.continuous:
+            spinner.spin()
+        else:
+            print(
+                f"Moving in calibrated 90-degree segments with a "
+                f"{args.pause_seconds:g}-second pause."
+            )
+            spinner.spin_quarter_turns(args.pause_seconds)
     except KeyboardInterrupt:
         print("\nMotor stopped.")
     finally:

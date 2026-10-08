@@ -173,8 +173,8 @@ the live acceptance checklist.
 
 ### Testing the rotating platform
 
-The standalone platform test drives a STEP/DIR motor driver continuously without
-starting the scanner. It uses Raspberry Pi BCM numbering: GPIO 5 for `DIR` and
+The standalone platform test drives a STEP/DIR motor driver without starting the
+scanner. It uses Raspberry Pi BCM numbering: GPIO 5 for `DIR` and
 GPIO 6 for `STEP`. The default clockwise direction is `DIR=LOW`, matching the
 original Arduino program. Run it on the Pi with:
 
@@ -183,8 +183,11 @@ python src/hardware/stepper_spin.py
 ```
 
 The default profile matches the original Arduino program, ramping from 100 to
-1500 pulses per second over the first 7000 pulses. Slower rates can be selected
-with the command-line options if mechanical testing requires them.
+1500 pulses per second over the first 7000 pulses. It repeats the four calibrated
+90-degree segments (5450, 4050, 4250, and 4250 pulses), pauses for one second at
+each position, and restarts the acceleration ramp for the next move. Use
+`--continuous` for uninterrupted rotation. Slower rates can be selected with the
+command-line options if mechanical testing requires them.
 Press `Ctrl+C` to stop and leave the step output low. To make a cautious finite
 test first, run `python src/hardware/stepper_spin.py --steps 1000`. Reverse an
 unexpected direction with `--clockwise-level high`.
