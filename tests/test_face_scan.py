@@ -206,6 +206,80 @@ class FaceScannerTests(unittest.TestCase):
         self.assertFalse(state["faces"]["D"]["inferred"])
         self.assertTrue(camera.closed)
 
+    def test_motorized_scanner_captures_four_positions_and_returns_home(self) -> None:
+        class FakePlatform:
+            def __init__(self) -> None:
+                self.position = 0
+                self.rotate_calls = 0
+                self.return_home_calls = 0
+
+            def rotate_next_quarter(self) -> int:
+                self.position = (self.position + 1) % 4
+                self.rotate_calls += 1
+                return 1
+
+            def return_home(self) -> int:
+                self.return_home_calls += 1
+                self.position = 0
+                return 0
+
+            def close(self) -> None:
+                pass
+
+        platform = FakePlatform()
+
+        class FakeCamera:
+            closed = False
+
+            def read(self) -> np.ndarray:
+                frame = np.zeros(
+                    (face_scan.FRAME_HEIGHT, face_scan.FRAME_WIDTH, 3), np.uint8
+                )
+                frame[0, 0, 0] = platform.position
+                return frame
+
+            def close(self) -> None:
+                self.closed = True
+
+        def capture(frame, quad):
+            colour = (
+                "white"
+                if quad == face_scan.ANGLED_TOP_QUAD
+                else ("green", "red", "blue", "orange")[int(frame[0, 0, 0])]
+            )
+            samples = [sample(colour, index // 3, index % 3) for index in range(9)]
+            return samples, np.zeros(
+                (face_scan.FACE_SIZE, face_scan.FACE_SIZE, 3), np.uint8
+            )
+
+        camera = FakeCamera()
+        keys = [ord(" ")] + [-1] * 12
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(
+            face_scan, "sample_angled_face", side_effect=capture
+        ), mock.patch.object(face_scan, "draw_perspective_grid"), mock.patch.object(
+            face_scan, "draw_angled_status"
+        ), mock.patch.object(face_scan.cv2, "imshow"), mock.patch.object(
+            face_scan.cv2, "waitKey", side_effect=keys
+        ), mock.patch.object(
+            face_scan.cv2, "imwrite", return_value=True
+        ), mock.patch.object(
+            face_scan.cv2, "destroyAllWindows"
+        ), mock.patch("builtins.print"):
+            outcome = face_scan.run_motorized_angled_scanner(
+                camera, Path(directory), platform, settle_seconds=0
+            )
+            state = json.loads(
+                (Path(directory) / "cube_state.json").read_text(encoding="utf-8")
+            )
+
+        self.assertEqual(outcome.facelets_urfdlb, "".join(face * 9 for face in "URFDLB"))
+        self.assertEqual(platform.rotate_calls, 4)
+        self.assertEqual(platform.position, 0)
+        self.assertGreaterEqual(platform.return_home_calls, 1)
+        self.assertEqual(state["captured_faces"], ["F", "U", "R", "B", "L"])
+        self.assertEqual(state["inferred_faces"], ["D"])
+        self.assertTrue(camera.closed)
+
     def test_centre_calibration_classifies_solved_cube(self) -> None:
         captured = solved_cube_samples()
         classified = face_scan.classify_cube(captured)

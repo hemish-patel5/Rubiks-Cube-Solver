@@ -9,6 +9,7 @@ communication.
 flowchart LR
     Camera[Camera / OpenCV] --> Main[Main workflow thread]
     Keyboard[Keyboard controls] --> Main
+    Main <--> Platform[STEP/DIR rotating platform]
     Main --> Solver[Validation and Kociemba]
     Main --> SQLite[(SQLite solve history)]
     Main -. wake event .-> Worker[remote-sync worker]

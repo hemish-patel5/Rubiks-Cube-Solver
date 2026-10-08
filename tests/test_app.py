@@ -79,6 +79,41 @@ class ApplicationTerminalTests(unittest.TestCase):
         self.assertEqual(self.status(), ("CANCELLED", 0, None))
         self.assertEqual(self.row_count(), 1)
 
+    def test_motorized_mode_creates_passes_and_closes_platform(self) -> None:
+        self.arguments.scan_mode = "motorized-angled"
+        self.arguments.motor_dir_pin = 5
+        self.arguments.motor_step_pin = 6
+        self.arguments.motor_clockwise_level = "low"
+        self.arguments.motor_start_rate = 100
+        self.arguments.motor_cruise_rate = 1_000
+        self.arguments.motor_ramp_steps = 800
+        self.arguments.motor_settle_seconds = 1.0
+        platform = mock.Mock()
+
+        parse, uploader, camera = self.patches()
+        with (
+            parse,
+            uploader,
+            camera,
+            mock.patch.object(
+                app, "create_stepper_platform", return_value=platform
+            ) as create_platform,
+            mock.patch.object(app, "scan_cube", return_value=None) as scan,
+        ):
+            app.main()
+
+        create_platform.assert_called_once_with(
+            dir_pin=5,
+            step_pin=6,
+            clockwise_high=False,
+            start_rate=100,
+            cruise_rate=1_000,
+            quarter_ramp_steps=800,
+        )
+        self.assertIs(scan.call_args.kwargs["platform"], platform)
+        self.assertEqual(scan.call_args.kwargs["motor_settle_seconds"], 1.0)
+        platform.close.assert_called_once_with()
+
     def test_camera_error_is_recorded_and_returns_failure(self) -> None:
         parse, uploader, _camera = self.patches()
         with (

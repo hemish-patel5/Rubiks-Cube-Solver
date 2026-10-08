@@ -13,6 +13,7 @@ BCM_STEP_PIN = 6
 STEPS_PER_REVOLUTION = 18_000
 # Segment lengths derived from cumulative positions 5450, 9500, 13750, 18000.
 CALIBRATED_QUARTER_STEPS = (5_450, 4_050, 4_250, 4_250)
+DEFAULT_QUARTER_RAMP_STEPS = 800
 
 
 class OutputPin(Protocol):
@@ -58,6 +59,26 @@ def step_period_us(acceleration_step: int, settings: SpinSettings) -> int:
     return 1_000_000 // rate
 
 
+def positioned_step_period_us(
+    step_index: int,
+    total_steps: int,
+    settings: SpinSettings,
+    ramp_steps: int = DEFAULT_QUARTER_RAMP_STEPS,
+) -> int:
+    """Return a symmetric accelerate/decelerate period for a positioned move."""
+    if total_steps <= 0:
+        raise ValueError("total_steps must be greater than zero")
+    if not 0 <= step_index < total_steps:
+        raise ValueError("step_index must be within the movement")
+    if ramp_steps <= 0:
+        raise ValueError("ramp_steps must be greater than zero")
+
+    progress = min(step_index, total_steps - step_index - 1, ramp_steps)
+    rate_range = settings.cruise_rate - settings.start_rate
+    rate = settings.start_rate + rate_range * progress // ramp_steps
+    return 1_000_000 // rate
+
+
 class StepperSpinner:
     """Drive a motor continuously, or for a finite pulse count in tests."""
 
@@ -67,13 +88,31 @@ class StepperSpinner:
         step_pin: OutputPin,
         settings: SpinSettings,
         clockwise_high: bool = False,
+        quarter_ramp_steps: int = DEFAULT_QUARTER_RAMP_STEPS,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
+        if quarter_ramp_steps <= 0:
+            raise ValueError("quarter_ramp_steps must be greater than zero")
         self.direction_pin = direction_pin
         self.step_pin = step_pin
         self.settings = settings
         self.clockwise_high = clockwise_high
+        self.quarter_ramp_steps = quarter_ramp_steps
         self.sleep = sleep
+        self._quarter_index = 0
+
+    @property
+    def quarter_index(self) -> int:
+        """Current calibrated position: 0=green, 1=red, 2=blue, 3=orange."""
+        return self._quarter_index
+
+    def _prepare_clockwise(self) -> None:
+        self.step_pin.off()
+        if self.clockwise_high:
+            self.direction_pin.on()
+        else:
+            self.direction_pin.off()
+        self.sleep(self.settings.settle_seconds)
 
     def spin(self, steps: int | None = None) -> int:
         """Rotate clockwise until interrupted, or until ``steps`` are emitted."""
@@ -82,13 +121,7 @@ class StepperSpinner:
 
         total_steps = 0
         acceleration_step = 0
-        self.step_pin.off()
-        if self.clockwise_high:
-            self.direction_pin.on()
-        else:
-            self.direction_pin.off()
-        # Give the platform time to stop moving before the acceleration ramp.
-        self.sleep(self.settings.settle_seconds)
+        self._prepare_clockwise()
 
         try:
             while steps is None or total_steps < steps:
@@ -114,6 +147,43 @@ class StepperSpinner:
 
         return total_steps
 
+    def move_positioned(self, steps: int) -> int:
+        """Move an exact pulse count with acceleration and deceleration."""
+        if steps <= 0:
+            raise ValueError("steps must be greater than zero")
+        self._prepare_clockwise()
+        try:
+            for step_index in range(steps):
+                period_us = positioned_step_period_us(
+                    step_index,
+                    steps,
+                    self.settings,
+                    self.quarter_ramp_steps,
+                )
+                self.step_pin.on()
+                self.sleep(self.settings.pulse_high_us / 1_000_000)
+                self.step_pin.off()
+                self.sleep(
+                    (period_us - self.settings.pulse_high_us) / 1_000_000
+                )
+        finally:
+            self.step_pin.off()
+        return steps
+
+    def rotate_next_quarter(self) -> int:
+        """Move clockwise to the next calibrated camera position."""
+        steps = CALIBRATED_QUARTER_STEPS[self._quarter_index]
+        moved = self.move_positioned(steps)
+        self._quarter_index = (self._quarter_index + 1) % 4
+        return moved
+
+    def return_home(self) -> int:
+        """Complete clockwise quarter turns until green is at the camera."""
+        moved = 0
+        while self._quarter_index != 0:
+            moved += self.rotate_next_quarter()
+        return moved
+
     def spin_quarter_turns(
         self, pause_seconds: float = 1.0, turns: int | None = None
     ) -> int:
@@ -126,11 +196,7 @@ class StepperSpinner:
         total_steps = 0
         turn_index = 0
         while turns is None or turn_index < turns:
-            segment_steps = CALIBRATED_QUARTER_STEPS[
-                turn_index % len(CALIBRATED_QUARTER_STEPS)
-            ]
-            # Restart the acceleration ramp after each stationary position.
-            total_steps += self.spin(segment_steps)
+            total_steps += self.rotate_next_quarter()
             turn_index += 1
             angle = (turn_index % 4) * 90 or 360
             print(
@@ -147,6 +213,37 @@ class StepperSpinner:
         self.step_pin.off()
         self.step_pin.close()
         self.direction_pin.close()
+
+
+def create_stepper_platform(
+    dir_pin: int = BCM_DIR_PIN,
+    step_pin: int = BCM_STEP_PIN,
+    clockwise_high: bool = False,
+    start_rate: int = 100,
+    cruise_rate: int = 1_000,
+    quarter_ramp_steps: int = DEFAULT_QUARTER_RAMP_STEPS,
+) -> StepperSpinner:
+    """Create the motorized scanner platform using Raspberry Pi BCM pins."""
+    try:
+        from gpiozero import OutputDevice
+    except ImportError as exc:
+        raise RuntimeError(
+            "GPIO Zero is unavailable; install requirements.txt on the Raspberry Pi"
+        ) from exc
+
+    direction_pin = OutputDevice(dir_pin, active_high=True, initial_value=False)
+    try:
+        step_output = OutputDevice(step_pin, active_high=True, initial_value=False)
+    except Exception:
+        direction_pin.close()
+        raise
+    return StepperSpinner(
+        direction_pin,
+        step_output,
+        SpinSettings(start_rate=start_rate, cruise_rate=cruise_rate),
+        clockwise_high=clockwise_high,
+        quarter_ramp_steps=quarter_ramp_steps,
+    )
 
 
 def parse_args() -> argparse.Namespace:

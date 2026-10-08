@@ -6,7 +6,7 @@ This repository contains the source code, documentation, and hardware resources 
 
 The project aims to develop a **Raspberry Pi-based Rubik's Cube Scanning and Solving Assistant** that uses computer vision to recognise the colours on a standard 3×3 Rubik's Cube, validate the cube state, calculate a solution, and guide the user through the required solving moves.
 
-The system focuses on reliable colour recognition using OpenCV under controlled lighting conditions. As an optional extension, a motorised platform may be developed to automatically rotate the cube between scans.
+The system focuses on reliable colour recognition using OpenCV under controlled lighting conditions. A motorised platform can automatically rotate the cube between angled scans.
 
 ---
 
@@ -30,7 +30,7 @@ The system will:
 - Display step-by-step solving instructions to the user.
 - Record solve history and statistics in an SQLite database.
 - Display solve history and statistics through a web dashboard.
-- Optionally rotate the cube automatically using a servo or stepper motor.
+- Rotate the cube automatically between angled scans using the stepper platform.
 
 ---
 
@@ -40,6 +40,7 @@ The system will:
 
 - Live camera preview using a USB webcam or Raspberry Pi camera
 - Four-position angled scanning with physical bottom-face reconstruction and fallback
+- Automatic stepper rotation and capture at Green, Red, Blue, and Orange positions
 - Per-session colour calibration from visible centre stickers
 - Colour-count validation and a solver-ready URFDLB facelet string
 - Incremental JSON storage of colours, raw BGR/HSV samples, and face images
@@ -53,7 +54,6 @@ The system will:
 
 - Raspberry Pi camera acceptance testing
 - Live LAMP deployment, HTTPS, upload/retry, and browser acceptance
-- Optional motorised rotating platform
 
 ---
 
@@ -113,6 +113,32 @@ head-on yellow scan with green at the top. This fallback prevents the solver fro
 using an arbitrary completion. The original workflow remains available with
 `--mode head-on`.
 
+### Motorized angled scanner
+
+Start with White on top and Green facing the camera, aligned with both guides:
+
+```bash
+python src/app.py --scan-mode motorized-angled --backend opencv --device 0 \
+  --output scan_output --database data/solve_history.db
+```
+
+Press `SPACE` once to capture Green and White. The application then rotates and
+captures Red, Blue, and Orange automatically. Every movement accelerates for 800
+pulses, cruises at up to 1000 pulses per second, decelerates for the final 800
+pulses, and waits one second before capturing. After Orange, the fourth movement
+returns the platform to Green. The calibrated segments are 5450, 4050, 4250, and
+4250 pulses.
+
+Use `R` or `B` to abandon the current automatic sequence, return to Green, and
+start again. Use `Q` to return home and cancel. If the yellow face cannot be
+inferred uniquely, reposition the cube for the requested head-on Yellow scan and
+press `SPACE`.
+
+Motor defaults match the current wiring: BCM GPIO 5 for `DIR`, BCM GPIO 6 for
+`STEP`, and `DIR=LOW` for clockwise. Relevant tuning options are
+`--motor-start-rate`, `--motor-cruise-rate`, `--motor-ramp-steps`, and
+`--motor-settle-seconds`.
+
 Each capture is stored immediately in `scan_output/cube_state.json`, along with
 `face_U.jpg` through `face_B.jpg`. The JSON contains the 3x3 colour matrix and raw
 BGR/HSV values for every sticker. After face six it also contains a 54-character
@@ -170,12 +196,11 @@ original Arduino program. Run it on the Pi with:
 python src/hardware/stepper_spin.py
 ```
 
-The default profile matches the original Arduino program, ramping from 100 to
-1500 pulses per second over the first 7000 pulses. It repeats the four calibrated
-90-degree segments (5450, 4050, 4250, and 4250 pulses), pauses for one second at
-each position, and restarts the acceleration ramp for the next move. Use
-`--continuous` for uninterrupted rotation. Slower rates can be selected with the
-command-line options if mechanical testing requires them.
+The standalone continuous profile matches the original Arduino program. Its
+default quarter-turn sequence uses the four calibrated segments (5450, 4050,
+4250, and 4250 pulses), with acceleration and deceleration at each position and
+a one-second pause. Use `--continuous` for uninterrupted rotation. Rates can be
+selected with the command-line options if mechanical testing requires them.
 Press `Ctrl+C` to stop and leave the step output low. To make a cautious finite
 test first, run `python src/hardware/stepper_spin.py --steps 1000`. Reverse an
 unexpected direction with `--clockwise-level high`.
@@ -283,7 +308,7 @@ rubiks-cube-assistant/
 
 ## Phase 6 – Optional Extension
 
-- [ ] Motorised cube rotation platform
+- [x] Motorised cube rotation and automatic angled capture workflow
 
 ---
 
@@ -300,6 +325,7 @@ Current progress:
 - ✅ 3x3 solver, keyboard move guidance, and SQLite history implemented
 - ✅ LAMP schema, authenticated write endpoint, and dashboard with session removal implemented
 - ✅ Remote upload/retry isolated from the camera and UI in a tested background thread
+- ✅ Stepper platform integrated with automatic four-position scanning
 - ⏳ Raspberry Pi camera, physical solve, and performance acceptance
 - ⏳ Live MySQL migration, HTTPS, authenticated upload/retry, and browser verification
 

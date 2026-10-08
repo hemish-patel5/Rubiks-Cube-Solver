@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from cube.solver import solve_3x3
+from hardware.stepper_spin import create_stepper_platform
 from interface.guidance import show_guidance
 from storage.history import SolveHistory, SolveRecord
 from storage.sync import HttpSummaryUploader, RemoteSyncWorker
@@ -19,9 +20,9 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--scan-mode",
-        choices=("angled-sides", "head-on"),
+        choices=("angled-sides", "motorized-angled", "head-on"),
         default="angled-sides",
-        help="camera workflow (default: angled views with inferred bottom face)",
+        help="camera workflow (motorized-angled rotates the platform automatically)",
     )
     parser.add_argument(
         "--backend",
@@ -44,6 +45,15 @@ def parse_args() -> argparse.Namespace:
         default=Path("data/solve_history.db"),
         help="SQLite history database (used by the complete application)",
     )
+    parser.add_argument("--motor-dir-pin", type=int, default=5)
+    parser.add_argument("--motor-step-pin", type=int, default=6)
+    parser.add_argument(
+        "--motor-clockwise-level", choices=("low", "high"), default="low"
+    )
+    parser.add_argument("--motor-start-rate", type=int, default=100)
+    parser.add_argument("--motor-cruise-rate", type=int, default=1_000)
+    parser.add_argument("--motor-ramp-steps", type=int, default=800)
+    parser.add_argument("--motor-settle-seconds", type=float, default=1.0)
     return parser.parse_args()
 
 
@@ -63,7 +73,17 @@ def main() -> None:
     solve_duration_seconds: float | None = None
     terminal_status = "ERROR"
     error_message: str | None = None
+    platform = None
     try:
+        if args.scan_mode == "motorized-angled":
+            platform = create_stepper_platform(
+                dir_pin=args.motor_dir_pin,
+                step_pin=args.motor_step_pin,
+                clockwise_high=args.motor_clockwise_level == "high",
+                start_rate=args.motor_start_rate,
+                cruise_rate=args.motor_cruise_rate,
+                quarter_ramp_steps=args.motor_ramp_steps,
+            )
         camera = create_camera(args.backend, args.device)
 
         def validate_and_solve(outcome: ScanOutcome) -> None:
@@ -71,7 +91,14 @@ def main() -> None:
             facelets = outcome.facelets_urfdlb
             moves = solve_3x3(facelets)
 
-        outcome = scan_cube(camera, args.output, validate_and_solve, mode=args.scan_mode)
+        outcome = scan_cube(
+            camera,
+            args.output,
+            validate_and_solve,
+            mode=args.scan_mode,
+            platform=platform,
+            motor_settle_seconds=getattr(args, "motor_settle_seconds", 1.0),
+        )
         if outcome is None:
             terminal_status = "CANCELLED"
             print("Scan cancelled")
@@ -89,18 +116,22 @@ def main() -> None:
         print(f"Application error: {exc}")
     finally:
         try:
-            history.record(
-                SolveRecord(
-                    session_id=session_id,
-                    started_at=started_at,
-                    finished_at=datetime.now(timezone.utc).isoformat(),
-                    status=terminal_status,
-                    facelets_urfdlb=facelets,
-                    moves=tuple(moves),
-                    solve_duration_seconds=solve_duration_seconds,
-                    error_message=error_message,
+            try:
+                history.record(
+                    SolveRecord(
+                        session_id=session_id,
+                        started_at=started_at,
+                        finished_at=datetime.now(timezone.utc).isoformat(),
+                        status=terminal_status,
+                        facelets_urfdlb=facelets,
+                        moves=tuple(moves),
+                        solve_duration_seconds=solve_duration_seconds,
+                        error_message=error_message,
+                    )
                 )
-            )
+            finally:
+                if platform is not None:
+                    platform.close()
         finally:
             if sync_worker:
                 sync_worker.wake()
