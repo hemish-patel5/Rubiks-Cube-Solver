@@ -182,9 +182,9 @@ original Arduino program. Run it on the Pi with:
 python src/hardware/stepper_spin.py
 ```
 
-The gentle geared-platform profile pauses for a quarter second, then ramps from
-20 to 250 pulses per second over the first 2500 pulses. Increase it only after the
-unloaded platform turns reliably without gear slip.
+The default profile matches the original Arduino program, ramping from 100 to
+1500 pulses per second over the first 7000 pulses. Slower rates can be selected
+with the command-line options if mechanical testing requires them.
 Press `Ctrl+C` to stop and leave the step output low. To make a cautious finite
 test first, run `python src/hardware/stepper_spin.py --steps 1000`. Reverse an
 unexpected direction with `--clockwise-level high`.
