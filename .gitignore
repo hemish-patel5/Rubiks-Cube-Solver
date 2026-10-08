@@ -6,6 +6,7 @@ dist/
 
 # Compiled Python bytecode
 *.py[cod]
+*.egg-info/
 
 # Log files
 *.log

@@ -15,11 +15,6 @@ from storage.history import SolveHistory, SolveRecord
 from vision.face_scan import ScanOutcome
 
 
-class FakeControls:
-    def show_status(self, _status: str, _detail: str = "") -> None:
-        pass
-
-
 class ApplicationTerminalTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -48,7 +43,6 @@ class ApplicationTerminalTests(unittest.TestCase):
     def patches(self, uploader=None):
         return (
             mock.patch.object(app, "parse_args", return_value=self.arguments),
-            mock.patch.object(app, "SenseHatAdapter", return_value=FakeControls()),
             mock.patch.object(
                 app.HttpSummaryUploader, "from_environment", return_value=uploader
             ),
@@ -56,15 +50,14 @@ class ApplicationTerminalTests(unittest.TestCase):
         )
 
     def test_complete_run_is_recorded(self) -> None:
-        def solved_scan(_camera, _output, validator, _controls, **_kwargs):
+        def solved_scan(_camera, _output, validator, **_kwargs):
             outcome = ScanOutcome(SOLVED_STATE)
             validator(outcome)
             return outcome
 
-        parse, controls, uploader, camera = self.patches()
+        parse, uploader, camera = self.patches()
         with (
             parse,
-            controls,
             uploader,
             camera,
             mock.patch.object(app, "scan_cube", side_effect=solved_scan),
@@ -75,10 +68,9 @@ class ApplicationTerminalTests(unittest.TestCase):
         self.assertEqual(self.row_count(), 1)
 
     def test_scan_cancellation_is_recorded(self) -> None:
-        parse, controls, uploader, camera = self.patches()
+        parse, uploader, camera = self.patches()
         with (
             parse,
-            controls,
             uploader,
             camera,
             mock.patch.object(app, "scan_cube", return_value=None),
@@ -88,10 +80,9 @@ class ApplicationTerminalTests(unittest.TestCase):
         self.assertEqual(self.row_count(), 1)
 
     def test_camera_error_is_recorded_and_returns_failure(self) -> None:
-        parse, controls, uploader, _camera = self.patches()
+        parse, uploader, _camera = self.patches()
         with (
             parse,
-            controls,
             uploader,
             mock.patch.object(
                 app, "create_camera", side_effect=RuntimeError("camera unavailable")
@@ -138,10 +129,9 @@ class ApplicationTerminalTests(unittest.TestCase):
             except BaseException as exc:  # pragma: no cover - assertion reports details
                 failures.append(exc)
 
-        parse, controls, uploader, camera = self.patches(BlockingUploader())
+        parse, uploader, camera = self.patches(BlockingUploader())
         with (
             parse,
-            controls,
             uploader,
             camera,
             mock.patch.object(app, "scan_cube", side_effect=cancelled_scan),

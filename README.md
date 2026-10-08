@@ -30,7 +30,6 @@ The system will:
 - Display step-by-step solving instructions to the user.
 - Record solve history and statistics in an SQLite database.
 - Display solve history and statistics through a web dashboard.
-- Provide user feedback using the Raspberry Pi Sense HAT.
 - Optionally rotate the cube automatically using a servo or stepper motor.
 
 ---
@@ -46,14 +45,13 @@ The system will:
 - Incremental JSON storage of colours, raw BGR/HSV samples, and face images
 - Kociemba 1.2.1 physical-state validation and 3x3 solutions
 - OpenCV next/back/cancel move guidance
-- Sense HAT LED status and joystick controls with a laptop fallback
 - SQLite terminal history and retryable summary synchronization
 - Background LAMP synchronization that does not block scanning or guidance
 - Plain PHP/MySQL JSON endpoint and responsive dashboard with session removal
 
 ### Planned
 
-- Raspberry Pi camera and Sense HAT acceptance testing
+- Raspberry Pi camera acceptance testing
 - Live LAMP deployment, HTTPS, upload/retry, and browser acceptance
 - Optional motorised rotating platform
 
@@ -148,16 +146,6 @@ whether each face was inferred. A colour-balanced but physically impossible cube
 is rejected so it can be rescanned. A solved cube produces zero moves.
 
 Keyboard guidance uses `SPACE` or `N` for next, `B` for back, and `Q` to cancel.
-Sense HAT controls are:
-
-| Context | Joystick controls |
-|---|---|
-| Scanner | middle capture, left back, down reset, up cancel |
-| Guidance | right/middle next, left back, up cancel |
-
-If Sense HAT is unavailable, the application continues with keyboard controls.
-The LED matrix mirrors ready, scanning, accepted, error, calculating, current
-move, and complete states when hardware is present.
 
 Every run writes one `COMPLETE`, `ERROR`, or `CANCELLED` row to SQLite before any
 remote attempt. To enable best-effort LAMP synchronization, set `RUBIKS_SYNC_URL`
@@ -216,7 +204,6 @@ recreate its server record.
 
 - Raspberry Pi
 - Raspberry Pi Camera Module (or USB Webcam)
-- Raspberry Pi Sense HAT
 - Rubik's Cube
 - Fixed LED lighting
 - Cube stand
@@ -246,7 +233,7 @@ rubiks-cube-assistant/
 ├── src/
 │   ├── app.py              # Full 3x3 workflow
 │   ├── cube/solver.py      # Kociemba adapter
-│   ├── hardware/           # Optional Sense HAT adapter
+│   ├── hardware/           # Stepper platform controller
 │   ├── interface/          # OpenCV move guidance
 │   ├── storage/            # SQLite history and HTTP sync
 │   └── vision/face_scan.py # Existing fixed-grid LAB scanner
@@ -289,7 +276,6 @@ rubiks-cube-assistant/
 
 ## Phase 5 – Embedded Features
 
-- [x] Sense HAT adapter with no-hardware fallback
 - [x] SQLite terminal history
 - [x] LAMP code and local security/data contract tests
 - [x] Background LAMP synchronization with bounded shutdown
@@ -311,10 +297,10 @@ Current progress:
 - ✅ Repository created
 - ✅ Development environment being configured
 - ✅ Existing OpenCV/LAB team scanner preserved
-- ✅ 3x3 solver, move guidance, Sense HAT adapter, and SQLite history implemented
+- ✅ 3x3 solver, keyboard move guidance, and SQLite history implemented
 - ✅ LAMP schema, authenticated write endpoint, and dashboard with session removal implemented
 - ✅ Remote upload/retry isolated from the camera and UI in a tested background thread
-- ⏳ Raspberry Pi camera, Sense HAT, physical solve, and performance acceptance
+- ⏳ Raspberry Pi camera, physical solve, and performance acceptance
 - ⏳ Live MySQL migration, HTTPS, authenticated upload/retry, and browser verification
 
 ## Local verification

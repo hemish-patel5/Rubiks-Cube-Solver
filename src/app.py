@@ -9,7 +9,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from cube.solver import solve_3x3
-from hardware.sense_hat_adapter import SenseHatAdapter
 from interface.guidance import show_guidance
 from storage.history import SolveHistory, SolveRecord
 from storage.sync import HttpSummaryUploader, RemoteSyncWorker
@@ -64,9 +63,6 @@ def main() -> None:
     solve_duration_seconds: float | None = None
     terminal_status = "ERROR"
     error_message: str | None = None
-    controls = SenseHatAdapter()
-    controls.show_status("ready")
-
     try:
         camera = create_camera(args.backend, args.device)
 
@@ -75,9 +71,7 @@ def main() -> None:
             facelets = outcome.facelets_urfdlb
             moves = solve_3x3(facelets)
 
-        outcome = scan_cube(
-            camera, args.output, validate_and_solve, controls, mode=args.scan_mode
-        )
+        outcome = scan_cube(camera, args.output, validate_and_solve, mode=args.scan_mode)
         if outcome is None:
             terminal_status = "CANCELLED"
             print("Scan cancelled")
@@ -85,12 +79,11 @@ def main() -> None:
             print("Solution:", " ".join(moves) or "already solved (0 moves)")
             solve_started = time.monotonic()
             try:
-                terminal_status = show_guidance(moves, controls)
+                terminal_status = show_guidance(moves)
             finally:
                 solve_duration_seconds = time.monotonic() - solve_started
             print("Guidance:", terminal_status)
     except Exception as exc:
-        controls.show_status("error")
         terminal_status = "ERROR"
         error_message = str(exc)
         print(f"Application error: {exc}")
