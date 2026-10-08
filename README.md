@@ -171,6 +171,29 @@ BGR/HSV samples, calibration evidence, or local paths. See
 [`docs/lamp-deployment.md`](docs/lamp-deployment.md) for server configuration and
 the live acceptance checklist.
 
+### Testing the rotating platform
+
+The standalone platform test drives a STEP/DIR motor driver continuously without
+starting the scanner. It uses Raspberry Pi BCM numbering: GPIO 5 for `DIR` and
+GPIO 6 for `STEP`. The default clockwise direction is `DIR=LOW`, matching the
+original Arduino program. Run it on the Pi with:
+
+```bash
+python src/hardware/stepper_spin.py
+```
+
+The speed ramps from 100 to 1500 pulses per second over the first 7000 pulses.
+Press `Ctrl+C` to stop and leave the step output low. To make a cautious finite
+test first, run `python src/hardware/stepper_spin.py --steps 1000`. Reverse an
+unexpected direction with `--clockwise-level high`.
+
+Connect BCM GPIO 5 (physical pin 29) to the driver's `DIR` input and BCM GPIO 6
+(physical pin 31) to `STEP`. Connect Pi 3.3 V to the TMC2209 logic `VDD` and Pi
+ground to its logic ground. The existing USB-A power lead connects 5 V to the
+driver `+` and ground to `-`; all grounds must be common. The motor connections
+are blue to `2B`, yellow to `2A`, orange to `1A`, pink to `1B`, with red left
+disconnected. Configure the TMC2209 current limit appropriately before testing.
+
 The dashboard lists sessions in pages of 25 with a **Remove** button on each row.
 The API key is configured directly in server-side PHP and must match Apache's
 `RUBIKS_API_KEY`; it is never rendered in the browser. Every dashboard visitor
