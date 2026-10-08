@@ -25,11 +25,11 @@ class OutputPin(Protocol):
 class SpinSettings:
     # Gentle defaults reduce shock loading in the geared platform. They can be
     # raised with CLI options after the mechanism runs without slipping.
-    start_rate: int = 10
-    cruise_rate: int = 120
-    acceleration_steps: int = 2_000
+    start_rate: int = 20
+    cruise_rate: int = 250
+    acceleration_steps: int = 2_500
     pulse_high_us: int = 100
-    settle_seconds: float = 0.5
+    settle_seconds: float = 0.25
 
     def __post_init__(self) -> None:
         if self.start_rate <= 0:
@@ -122,15 +122,15 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dir-pin", type=int, default=BCM_DIR_PIN)
     parser.add_argument("--step-pin", type=int, default=BCM_STEP_PIN)
-    parser.add_argument("--start-rate", type=int, default=10)
-    parser.add_argument("--cruise-rate", type=int, default=120)
-    parser.add_argument("--acceleration-steps", type=int, default=2_000)
+    parser.add_argument("--start-rate", type=int, default=20)
+    parser.add_argument("--cruise-rate", type=int, default=250)
+    parser.add_argument("--acceleration-steps", type=int, default=2_500)
     parser.add_argument("--pulse-high-us", type=int, default=100)
     parser.add_argument(
         "--settle-seconds",
         type=float,
-        default=0.5,
-        help="pause before stepping so the platform can settle (default: 0.5)",
+        default=0.25,
+        help="pause before stepping so the platform can settle (default: 0.25)",
     )
     parser.add_argument(
         "--clockwise-level",

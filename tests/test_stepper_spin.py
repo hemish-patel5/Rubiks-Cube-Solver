@@ -25,9 +25,9 @@ class FakePin:
 class StepperSpinnerTests(unittest.TestCase):
     def test_ramp_matches_configured_start_and_cruise_rates(self) -> None:
         settings = SpinSettings()
-        self.assertEqual(step_period_us(0, settings), 100_000)
-        self.assertEqual(step_period_us(2_000, settings), 8_333)
-        self.assertEqual(step_period_us(20_000, settings), 8_333)
+        self.assertEqual(step_period_us(0, settings), 50_000)
+        self.assertEqual(step_period_us(2_500, settings), 4_000)
+        self.assertEqual(step_period_us(20_000, settings), 4_000)
 
     def test_finite_spin_sets_direction_and_emits_requested_pulses(self) -> None:
         direction = FakePin()
@@ -42,7 +42,7 @@ class StepperSpinnerTests(unittest.TestCase):
         self.assertEqual(step.events.count("on"), 3)
         self.assertEqual(step.events[-1], "off")
         self.assertEqual(len(sleeps), 7)
-        self.assertEqual(sleeps[0], 0.5)
+        self.assertEqual(sleeps[0], 0.25)
 
     def test_step_is_left_low_when_pulse_generation_fails(self) -> None:
         direction = FakePin()
