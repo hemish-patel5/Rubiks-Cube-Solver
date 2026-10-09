@@ -1241,11 +1241,16 @@ def parse_args() -> argparse.Namespace:
         default=Path("scan_output"),
         help="directory for cube_state.json and six face images",
     )
-    parser.add_argument("--motor-dir-pin", type=int, default=5)
-    parser.add_argument("--motor-step-pin", type=int, default=6)
+    parser.add_argument("--motor-in1-pin", type=int, default=17)
+    parser.add_argument("--motor-in2-pin", type=int, default=18)
+    parser.add_argument("--motor-in3-pin", type=int, default=27)
+    parser.add_argument("--motor-in4-pin", type=int, default=22)
     parser.add_argument(
-        "--motor-clockwise-level", choices=("low", "high"), default="low"
+        "--motor-direction",
+        choices=("clockwise", "counterclockwise"),
+        default="clockwise",
     )
+    parser.add_argument("--motor-steps-per-revolution", type=int, default=4_096)
     parser.add_argument("--motor-settle-seconds", type=float, default=1.0)
     return parser.parse_args()
 
@@ -1258,9 +1263,12 @@ def main() -> None:
 
         try:
             platform = create_stepper_platform(
-                dir_pin=args.motor_dir_pin,
-                step_pin=args.motor_step_pin,
-                clockwise_high=args.motor_clockwise_level == "high",
+                in1_pin=args.motor_in1_pin,
+                in2_pin=args.motor_in2_pin,
+                in3_pin=args.motor_in3_pin,
+                in4_pin=args.motor_in4_pin,
+                clockwise=args.motor_direction == "clockwise",
+                steps_per_revolution=args.motor_steps_per_revolution,
             )
         except Exception as exc:
             raise SystemExit(f"Platform error: {exc}") from exc

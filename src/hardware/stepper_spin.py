@@ -1,19 +1,30 @@
-"""Drive a STEP/DIR rotating platform from Raspberry Pi GPIO."""
+"""Drive a four-input ULN2003 stepper platform from Raspberry Pi GPIO."""
 
 from __future__ import annotations
 
 import argparse
 import time
 from dataclasses import dataclass
-from typing import Callable, Protocol
+from typing import Callable, Protocol, Sequence
 
 
-BCM_DIR_PIN = 5
-BCM_STEP_PIN = 6
-STEPS_PER_REVOLUTION = 18_000
-# Segment lengths derived from cumulative positions 5450, 9500, 13750, 18000.
-CALIBRATED_QUARTER_STEPS = (5_450, 4_050, 4_250, 4_250)
-DEFAULT_QUARTER_RAMP_STEPS = 800
+BCM_IN_PINS = (17, 18, 27, 22)
+STEPS_PER_REVOLUTION = 4_096
+CALIBRATED_QUARTER_STEPS = (1_024, 1_024, 1_024, 1_024)
+DEFAULT_QUARTER_RAMP_STEPS = 128
+
+# Eight-state half-step sequence for a 28BYJ-48-style unipolar motor. Reversing
+# the tuple reverses the motor direction without changing the wiring.
+HALF_STEP_SEQUENCE = (
+    (1, 0, 0, 0),
+    (1, 1, 0, 0),
+    (0, 1, 0, 0),
+    (0, 1, 1, 0),
+    (0, 0, 1, 0),
+    (0, 0, 1, 1),
+    (0, 0, 0, 1),
+    (1, 0, 0, 1),
+)
 
 
 class OutputPin(Protocol):
@@ -26,13 +37,11 @@ class OutputPin(Protocol):
 
 @dataclass(frozen=True)
 class SpinSettings:
-    # Defaults match the original fast Arduino profile. CLI options remain
-    # available for slower mechanical testing when needed.
-    start_rate: int = 100
-    cruise_rate: int = 1_500
-    acceleration_steps: int = 7_000
-    pulse_high_us: int = 10
-    settle_seconds: float = 0.0001
+    """Speed profile expressed in ULN2003 half-steps per second."""
+
+    start_rate: int = 300
+    cruise_rate: int = 900
+    acceleration_steps: int = 128
 
     def __post_init__(self) -> None:
         if self.start_rate <= 0:
@@ -41,16 +50,10 @@ class SpinSettings:
             raise ValueError("cruise_rate must be at least start_rate")
         if self.acceleration_steps <= 0:
             raise ValueError("acceleration_steps must be greater than zero")
-        if self.pulse_high_us <= 0:
-            raise ValueError("pulse_high_us must be greater than zero")
-        if self.pulse_high_us >= 1_000_000 // self.cruise_rate:
-            raise ValueError("pulse_high_us must be shorter than the cruise period")
-        if self.settle_seconds < 0:
-            raise ValueError("settle_seconds must not be negative")
 
 
 def step_period_us(acceleration_step: int, settings: SpinSettings) -> int:
-    """Return the Arduino-equivalent linear ramp period for one pulse."""
+    """Return the period for one accelerating half-step."""
     ramp_step = min(max(acceleration_step, 0), settings.acceleration_steps)
     rate_range = settings.cruise_rate - settings.start_rate
     rate = settings.start_rate + (
@@ -79,106 +82,107 @@ def positioned_step_period_us(
     return 1_000_000 // rate
 
 
-class StepperSpinner:
-    """Drive a motor continuously, or for a finite pulse count in tests."""
+def quarter_steps(steps_per_revolution: int) -> tuple[int, int, int, int]:
+    """Split one configured revolution into four integer quarter turns."""
+    if steps_per_revolution < 4:
+        raise ValueError("steps_per_revolution must be at least four")
+    base, remainder = divmod(steps_per_revolution, 4)
+    return tuple(base + int(index < remainder) for index in range(4))
+
+
+class ULN2003Stepper:
+    """Drive a four-input ULN2003 board with an eight-state half-step sequence."""
 
     def __init__(
         self,
-        direction_pin: OutputPin,
-        step_pin: OutputPin,
+        pins: Sequence[OutputPin],
         settings: SpinSettings,
-        clockwise_high: bool = False,
+        clockwise: bool = True,
         quarter_ramp_steps: int = DEFAULT_QUARTER_RAMP_STEPS,
+        steps_per_revolution: int = STEPS_PER_REVOLUTION,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
+        if len(pins) != 4:
+            raise ValueError("ULN2003 control requires exactly four output pins")
         if quarter_ramp_steps <= 0:
             raise ValueError("quarter_ramp_steps must be greater than zero")
-        self.direction_pin = direction_pin
-        self.step_pin = step_pin
+
+        self.pins = tuple(pins)
         self.settings = settings
-        self.clockwise_high = clockwise_high
+        self.clockwise = clockwise
         self.quarter_ramp_steps = quarter_ramp_steps
+        self.quarter_step_counts = quarter_steps(steps_per_revolution)
         self.sleep = sleep
         self._quarter_index = 0
+        self._phase_index = 0
+        self.release()
 
     @property
     def quarter_index(self) -> int:
-        """Current calibrated position: 0=green, 1=red, 2=blue, 3=orange."""
+        """Current position: 0=green, 1=red, 2=blue, 3=orange."""
         return self._quarter_index
 
-    def _prepare_clockwise(self) -> None:
-        self.step_pin.off()
-        if self.clockwise_high:
-            self.direction_pin.on()
-        else:
-            self.direction_pin.off()
-        self.sleep(self.settings.settle_seconds)
+    def _energize(self, state: tuple[int, int, int, int]) -> None:
+        for pin, active in zip(self.pins, state):
+            pin.on() if active else pin.off()
+
+    def _step_once(self, period_us: int) -> None:
+        sequence_index = self._phase_index if self.clockwise else -self._phase_index
+        self._energize(HALF_STEP_SEQUENCE[sequence_index % len(HALF_STEP_SEQUENCE)])
+        self._phase_index = (self._phase_index + 1) % len(HALF_STEP_SEQUENCE)
+        self.sleep(period_us / 1_000_000)
+
+    def release(self) -> None:
+        """Remove power from every motor coil."""
+        for pin in self.pins:
+            pin.off()
 
     def spin(self, steps: int | None = None) -> int:
-        """Rotate clockwise until interrupted, or until ``steps`` are emitted."""
+        """Rotate until interrupted, or emit a finite number of half-steps."""
         if steps is not None and steps < 0:
             raise ValueError("steps must not be negative")
 
         total_steps = 0
         acceleration_step = 0
-        self._prepare_clockwise()
-
-        try:
-            while steps is None or total_steps < steps:
-                period_us = step_period_us(acceleration_step, self.settings)
-                self.step_pin.on()
-                self.sleep(self.settings.pulse_high_us / 1_000_000)
-                self.step_pin.off()
-                self.sleep(
-                    (period_us - self.settings.pulse_high_us) / 1_000_000
+        revolution_steps = sum(self.quarter_step_counts)
+        while steps is None or total_steps < steps:
+            self._step_once(step_period_us(acceleration_step, self.settings))
+            total_steps += 1
+            acceleration_step = min(
+                acceleration_step + 1, self.settings.acceleration_steps
+            )
+            if total_steps % revolution_steps == 0:
+                print(
+                    f"Completed revolutions: {total_steps // revolution_steps}"
+                    f" | total half-steps: {total_steps}",
+                    flush=True,
                 )
-
-                total_steps += 1
-                if acceleration_step < self.settings.acceleration_steps:
-                    acceleration_step += 1
-                if total_steps % STEPS_PER_REVOLUTION == 0:
-                    print(
-                        f"Completed revolutions: {total_steps // STEPS_PER_REVOLUTION}"
-                        f" | total pulses: {total_steps}",
-                        flush=True,
-                    )
-        finally:
-            self.step_pin.off()
-
         return total_steps
 
     def move_positioned(self, steps: int) -> int:
-        """Move an exact pulse count with acceleration and deceleration."""
+        """Move an exact half-step count with acceleration and deceleration."""
         if steps <= 0:
             raise ValueError("steps must be greater than zero")
-        self._prepare_clockwise()
-        try:
-            for step_index in range(steps):
-                period_us = positioned_step_period_us(
+        for step_index in range(steps):
+            self._step_once(
+                positioned_step_period_us(
                     step_index,
                     steps,
                     self.settings,
                     self.quarter_ramp_steps,
                 )
-                self.step_pin.on()
-                self.sleep(self.settings.pulse_high_us / 1_000_000)
-                self.step_pin.off()
-                self.sleep(
-                    (period_us - self.settings.pulse_high_us) / 1_000_000
-                )
-        finally:
-            self.step_pin.off()
+            )
         return steps
 
     def rotate_next_quarter(self) -> int:
-        """Move clockwise to the next calibrated camera position."""
-        steps = CALIBRATED_QUARTER_STEPS[self._quarter_index]
+        """Move clockwise to the next camera position."""
+        steps = self.quarter_step_counts[self._quarter_index]
         moved = self.move_positioned(steps)
         self._quarter_index = (self._quarter_index + 1) % 4
         return moved
 
     def return_home(self) -> int:
-        """Complete clockwise quarter turns until green is at the camera."""
+        """Complete clockwise quarter turns until green faces the camera."""
         moved = 0
         while self._quarter_index != 0:
             moved += self.rotate_next_quarter()
@@ -187,7 +191,7 @@ class StepperSpinner:
     def spin_quarter_turns(
         self, pause_seconds: float = 1.0, turns: int | None = None
     ) -> int:
-        """Repeat calibrated 90-degree moves with a pause after every move."""
+        """Repeat 90-degree movements with a pause after every movement."""
         if pause_seconds < 0:
             raise ValueError("pause_seconds must not be negative")
         if turns is not None and turns < 0:
@@ -202,28 +206,30 @@ class StepperSpinner:
             print(
                 f"Position: {angle} degrees"
                 f" | completed revolutions: {turn_index // 4}"
-                f" | total pulses: {total_steps}",
+                f" | total half-steps: {total_steps}",
                 flush=True,
             )
             self.sleep(pause_seconds)
-
         return total_steps
 
     def close(self) -> None:
-        self.step_pin.off()
-        self.step_pin.close()
-        self.direction_pin.close()
+        self.release()
+        for pin in self.pins:
+            pin.close()
 
 
 def create_stepper_platform(
-    dir_pin: int = BCM_DIR_PIN,
-    step_pin: int = BCM_STEP_PIN,
-    clockwise_high: bool = False,
-    start_rate: int = 100,
-    cruise_rate: int = 1_000,
+    in1_pin: int = BCM_IN_PINS[0],
+    in2_pin: int = BCM_IN_PINS[1],
+    in3_pin: int = BCM_IN_PINS[2],
+    in4_pin: int = BCM_IN_PINS[3],
+    clockwise: bool = True,
+    start_rate: int = 300,
+    cruise_rate: int = 900,
     quarter_ramp_steps: int = DEFAULT_QUARTER_RAMP_STEPS,
-) -> StepperSpinner:
-    """Create the motorized scanner platform using Raspberry Pi BCM pins."""
+    steps_per_revolution: int = STEPS_PER_REVOLUTION,
+) -> ULN2003Stepper:
+    """Create a ULN2003 platform using Raspberry Pi BCM pin numbers."""
     try:
         from gpiozero import OutputDevice
     except ImportError as exc:
@@ -231,102 +237,93 @@ def create_stepper_platform(
             "GPIO Zero is unavailable; install requirements.txt on the Raspberry Pi"
         ) from exc
 
-    direction_pin = OutputDevice(dir_pin, active_high=True, initial_value=False)
+    pins: list[OutputPin] = []
     try:
-        step_output = OutputDevice(step_pin, active_high=True, initial_value=False)
+        for pin_number in (in1_pin, in2_pin, in3_pin, in4_pin):
+            pins.append(
+                OutputDevice(pin_number, active_high=True, initial_value=False)
+            )
     except Exception:
-        direction_pin.close()
+        for pin in pins:
+            pin.close()
         raise
-    return StepperSpinner(
-        direction_pin,
-        step_output,
+
+    return ULN2003Stepper(
+        pins,
         SpinSettings(start_rate=start_rate, cruise_rate=cruise_rate),
-        clockwise_high=clockwise_high,
+        clockwise=clockwise,
         quarter_ramp_steps=quarter_ramp_steps,
+        steps_per_revolution=steps_per_revolution,
     )
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--dir-pin", type=int, default=BCM_DIR_PIN)
-    parser.add_argument("--step-pin", type=int, default=BCM_STEP_PIN)
-    parser.add_argument("--start-rate", type=int, default=100)
-    parser.add_argument("--cruise-rate", type=int, default=1_500)
-    parser.add_argument("--acceleration-steps", type=int, default=7_000)
-    parser.add_argument("--pulse-high-us", type=int, default=10)
+    parser.add_argument("--in1-pin", type=int, default=BCM_IN_PINS[0])
+    parser.add_argument("--in2-pin", type=int, default=BCM_IN_PINS[1])
+    parser.add_argument("--in3-pin", type=int, default=BCM_IN_PINS[2])
+    parser.add_argument("--in4-pin", type=int, default=BCM_IN_PINS[3])
+    parser.add_argument("--start-rate", type=int, default=300)
+    parser.add_argument("--cruise-rate", type=int, default=900)
+    parser.add_argument("--acceleration-steps", type=int, default=128)
+    parser.add_argument("--ramp-steps", type=int, default=128)
+    parser.add_argument("--steps-per-revolution", type=int, default=4_096)
     parser.add_argument(
-        "--settle-seconds",
-        type=float,
-        default=0.0001,
-        help="pause after setting direction (default: 0.0001 seconds)",
-    )
-    parser.add_argument(
-        "--clockwise-level",
-        choices=("low", "high"),
-        default="low",
-        help="DIR level that produces clockwise rotation (default: low)",
+        "--direction",
+        choices=("clockwise", "counterclockwise"),
+        default="clockwise",
     )
     parser.add_argument(
         "--steps",
         type=int,
-        help="diagnostic: make one movement with this many pulses, then stop",
+        help="diagnostic: make one movement with this many half-steps, then stop",
     )
     parser.add_argument(
-        "--continuous",
-        action="store_true",
-        help="spin without quarter-turn pauses (the previous behavior)",
+        "--continuous", action="store_true", help="spin without quarter-turn pauses"
     )
     parser.add_argument(
         "--pause-seconds",
         type=float,
         default=1.0,
-        help="pause after each calibrated 90-degree turn (default: 1.0)",
+        help="pause after each 90-degree turn (default: 1.0)",
     )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    settings = SpinSettings(
+    spinner = create_stepper_platform(
+        in1_pin=args.in1_pin,
+        in2_pin=args.in2_pin,
+        in3_pin=args.in3_pin,
+        in4_pin=args.in4_pin,
+        clockwise=args.direction == "clockwise",
+        start_rate=args.start_rate,
+        cruise_rate=args.cruise_rate,
+        quarter_ramp_steps=args.ramp_steps,
+        steps_per_revolution=args.steps_per_revolution,
+    )
+    spinner.settings = SpinSettings(
         start_rate=args.start_rate,
         cruise_rate=args.cruise_rate,
         acceleration_steps=args.acceleration_steps,
-        pulse_high_us=args.pulse_high_us,
-        settle_seconds=args.settle_seconds,
     )
 
-    try:
-        from gpiozero import OutputDevice
-    except ImportError as exc:
-        raise SystemExit(
-            "GPIO Zero is unavailable. Install requirements.txt on the Raspberry Pi."
-        ) from exc
-
-    direction_pin = OutputDevice(args.dir_pin, active_high=True, initial_value=False)
-    step_pin = OutputDevice(args.step_pin, active_high=True, initial_value=False)
-    spinner = StepperSpinner(
-        direction_pin,
-        step_pin,
-        settings,
-        clockwise_high=args.clockwise_level == "high",
-    )
-
-    print(f"Clockwise rotation: BCM DIR={args.dir_pin}, BCM STEP={args.step_pin}")
     print(
-        f"Ramping from {settings.start_rate} to {settings.cruise_rate} "
-        f"pulses/s over {settings.acceleration_steps} pulses."
+        "ULN2003 inputs: "
+        f"IN1=GPIO{args.in1_pin}, IN2=GPIO{args.in2_pin}, "
+        f"IN3=GPIO{args.in3_pin}, IN4=GPIO{args.in4_pin}"
     )
-    print("Press Ctrl+C to stop safely.")
+    print(
+        f"Direction: {args.direction}; speed: {args.start_rate} to "
+        f"{args.cruise_rate} half-steps/s. Press Ctrl+C to stop safely."
+    )
     try:
         if args.steps is not None:
             spinner.spin(args.steps)
         elif args.continuous:
             spinner.spin()
         else:
-            print(
-                f"Moving in calibrated 90-degree segments with a "
-                f"{args.pause_seconds:g}-second pause."
-            )
             spinner.spin_quarter_turns(args.pause_seconds)
     except KeyboardInterrupt:
         print("\nMotor stopped.")

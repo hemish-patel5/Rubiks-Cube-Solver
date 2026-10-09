@@ -45,14 +45,19 @@ def parse_args() -> argparse.Namespace:
         default=Path("data/solve_history.db"),
         help="SQLite history database (used by the complete application)",
     )
-    parser.add_argument("--motor-dir-pin", type=int, default=5)
-    parser.add_argument("--motor-step-pin", type=int, default=6)
+    parser.add_argument("--motor-in1-pin", type=int, default=17)
+    parser.add_argument("--motor-in2-pin", type=int, default=18)
+    parser.add_argument("--motor-in3-pin", type=int, default=27)
+    parser.add_argument("--motor-in4-pin", type=int, default=22)
     parser.add_argument(
-        "--motor-clockwise-level", choices=("low", "high"), default="low"
+        "--motor-direction",
+        choices=("clockwise", "counterclockwise"),
+        default="clockwise",
     )
-    parser.add_argument("--motor-start-rate", type=int, default=100)
-    parser.add_argument("--motor-cruise-rate", type=int, default=1_000)
-    parser.add_argument("--motor-ramp-steps", type=int, default=800)
+    parser.add_argument("--motor-start-rate", type=int, default=300)
+    parser.add_argument("--motor-cruise-rate", type=int, default=900)
+    parser.add_argument("--motor-ramp-steps", type=int, default=128)
+    parser.add_argument("--motor-steps-per-revolution", type=int, default=4_096)
     parser.add_argument("--motor-settle-seconds", type=float, default=1.0)
     return parser.parse_args()
 
@@ -77,12 +82,15 @@ def main() -> None:
     try:
         if args.scan_mode == "motorized-angled":
             platform = create_stepper_platform(
-                dir_pin=args.motor_dir_pin,
-                step_pin=args.motor_step_pin,
-                clockwise_high=args.motor_clockwise_level == "high",
+                in1_pin=args.motor_in1_pin,
+                in2_pin=args.motor_in2_pin,
+                in3_pin=args.motor_in3_pin,
+                in4_pin=args.motor_in4_pin,
+                clockwise=args.motor_direction == "clockwise",
                 start_rate=args.motor_start_rate,
                 cruise_rate=args.motor_cruise_rate,
                 quarter_ramp_steps=args.motor_ramp_steps,
+                steps_per_revolution=args.motor_steps_per_revolution,
             )
         camera = create_camera(args.backend, args.device)
 

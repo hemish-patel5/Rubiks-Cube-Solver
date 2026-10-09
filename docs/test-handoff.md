@@ -54,7 +54,7 @@ python src/vision/face_scan.py --help
 
 Expected results:
 
-- The test suite reports `Ran 53 tests` followed by `OK` (one PHP CLI test may be skipped when PHP is unavailable).
+- The test suite reports `Ran 54 tests` followed by `OK` (one PHP CLI test may be skipped when PHP is unavailable).
 - One dashboard contract test may be skipped if PHP CLI is not installed.
 - Compilation completes without an error.
 - Both help commands display their options without raising an exception.

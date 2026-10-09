@@ -81,12 +81,15 @@ class ApplicationTerminalTests(unittest.TestCase):
 
     def test_motorized_mode_creates_passes_and_closes_platform(self) -> None:
         self.arguments.scan_mode = "motorized-angled"
-        self.arguments.motor_dir_pin = 5
-        self.arguments.motor_step_pin = 6
-        self.arguments.motor_clockwise_level = "low"
-        self.arguments.motor_start_rate = 100
-        self.arguments.motor_cruise_rate = 1_000
-        self.arguments.motor_ramp_steps = 800
+        self.arguments.motor_in1_pin = 17
+        self.arguments.motor_in2_pin = 18
+        self.arguments.motor_in3_pin = 27
+        self.arguments.motor_in4_pin = 22
+        self.arguments.motor_direction = "clockwise"
+        self.arguments.motor_start_rate = 300
+        self.arguments.motor_cruise_rate = 900
+        self.arguments.motor_ramp_steps = 128
+        self.arguments.motor_steps_per_revolution = 4_096
         self.arguments.motor_settle_seconds = 1.0
         platform = mock.Mock()
 
@@ -103,12 +106,15 @@ class ApplicationTerminalTests(unittest.TestCase):
             app.main()
 
         create_platform.assert_called_once_with(
-            dir_pin=5,
-            step_pin=6,
-            clockwise_high=False,
-            start_rate=100,
-            cruise_rate=1_000,
-            quarter_ramp_steps=800,
+            in1_pin=17,
+            in2_pin=18,
+            in3_pin=27,
+            in4_pin=22,
+            clockwise=True,
+            start_rate=300,
+            cruise_rate=900,
+            quarter_ramp_steps=128,
+            steps_per_revolution=4_096,
         )
         self.assertIs(scan.call_args.kwargs["platform"], platform)
         self.assertEqual(scan.call_args.kwargs["motor_settle_seconds"], 1.0)

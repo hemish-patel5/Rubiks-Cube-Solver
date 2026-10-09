@@ -123,21 +123,24 @@ python src/app.py --scan-mode motorized-angled --backend opencv --device 0 \
 ```
 
 Press `SPACE` once to capture Green and White. The application then rotates and
-captures Red, Blue, and Orange automatically. Every movement accelerates for 800
-pulses, cruises at up to 1000 pulses per second, decelerates for the final 800
-pulses, and waits one second before capturing. After Orange, the fourth movement
-returns the platform to Green. The calibrated segments are 5450, 4050, 4250, and
-4250 pulses.
+captures Red, Blue, and Orange automatically. Every movement accelerates for 128
+half-steps, cruises at up to 900 half-steps per second, decelerates for the final
+128 half-steps, and waits one second before capturing. After Orange, the fourth
+movement returns the platform to Green. Each nominal 90-degree movement is 1024
+half-steps.
 
 Use `R` or `B` to abandon the current automatic sequence, return to Green, and
 start again. Use `Q` to return home and cancel. If the yellow face cannot be
 inferred uniquely, reposition the cube for the requested head-on Yellow scan and
 press `SPACE`.
 
-Motor defaults match the current wiring: BCM GPIO 5 for `DIR`, BCM GPIO 6 for
-`STEP`, and `DIR=LOW` for clockwise. Relevant tuning options are
+Motor defaults match the current ULN2003 wiring: BCM GPIO 17, 18, 27, and 22
+connect to `IN1`, `IN2`, `IN3`, and `IN4`. Relevant tuning options are
 `--motor-start-rate`, `--motor-cruise-rate`, `--motor-ramp-steps`, and
-`--motor-settle-seconds`.
+`--motor-settle-seconds`. Use `--motor-direction counterclockwise` if the default
+sequence turns the platform the wrong way, and calibrate rotation with
+`--motor-steps-per-revolution` if one physical revolution is not exactly 4096
+half-steps.
 
 Each capture is stored immediately in `scan_output/cube_state.json`, along with
 `face_U.jpg` through `face_B.jpg`. The JSON contains the 3x3 colour matrix and raw
@@ -187,30 +190,37 @@ the live acceptance checklist.
 
 ### Testing the rotating platform
 
-The standalone platform test drives a STEP/DIR motor driver without starting the
-scanner. It uses Raspberry Pi BCM numbering: GPIO 5 for `DIR` and
-GPIO 6 for `STEP`. The default clockwise direction is `DIR=LOW`, matching the
-original Arduino program. Run it on the Pi with:
+The short ULN2003 test rotates 90 degrees quickly, pauses for one second, and
+repeats until you press `Ctrl+C`:
 
 ```bash
-python src/hardware/stepper_spin.py
+python src/hardware/uln2003_quarter_test.py
 ```
 
-The standalone continuous profile matches the original Arduino program. Its
-default quarter-turn sequence uses the four calibrated segments (5450, 4050,
-4250, and 4250 pulses), with acceleration and deceleration at each position and
-a one-second pause. Use `--continuous` for uninterrupted rotation. Rates can be
-selected with the command-line options if mechanical testing requires them.
-Press `Ctrl+C` to stop and leave the step output low. To make a cautious finite
-test first, run `python src/hardware/stepper_spin.py --steps 1000`. Reverse an
-unexpected direction with `--clockwise-level high`.
+The controller sends the ULN2003 eight-state half-step sequence and defaults to
+4096 half-steps per output revolution, so each quarter turn uses 1024. It ramps
+from 300 to 900 half-steps per second and slows again before stopping. The coils
+remain energized during the one-second pause to hold the platform, then all four
+inputs turn off when the program exits.
 
-Connect BCM GPIO 5 (physical pin 29) to the driver's `DIR` input and BCM GPIO 6
-(physical pin 31) to `STEP`. Connect Pi 3.3 V to the TMC2209 logic `VDD` and Pi
-ground to its logic ground. The existing USB-A power lead connects 5 V to the
-driver `+` and ground to `-`; all grounds must be common. The motor connections
-are blue to `2B`, yellow to `2A`, orange to `1A`, pink to `1B`, with red left
-disconnected. Configure the TMC2209 current limit appropriately before testing.
+For adjustable testing, run `python src/hardware/stepper_spin.py`. It performs
+the same repeating quarter turns by default. Add `--continuous` for continuous
+rotation, `--steps 128` for a short finite movement, or
+`--direction counterclockwise` to reverse it.
+
+Wire the ULN2003 with BCM numbering as follows:
+
+| Raspberry Pi | Physical pin | ULN2003 |
+|---|---:|---|
+| GPIO17 | 11 | IN1 |
+| GPIO18 | 12 | IN2 |
+| GPIO27 | 13 | IN3 |
+| GPIO22 | 15 | IN4 |
+| 5 V | 2 or 4 | + / 5-12V |
+| GND | 6 | - / GND |
+
+Plug the stepper motor into the ULN2003 motor socket. Do not connect the motor
+coils directly to Raspberry Pi GPIO pins.
 
 The dashboard lists sessions in pages of 25 with a **Remove** button on each row.
 The API key is configured directly in server-side PHP and must match Apache's
