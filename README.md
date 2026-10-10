@@ -118,8 +118,7 @@ using an arbitrary completion. The original workflow remains available with
 Start with White on top and Green facing the camera, aligned with both guides:
 
 ```bash
-python src/app.py --scan-mode motorized-angled --backend opencv --device 0 \
-  --output scan_output --database data/solve_history.db
+python src/app.py
 ```
 
 Press `SPACE` once to capture Green and White. The application then rotates and
@@ -134,13 +133,10 @@ start again. Use `Q` to return home and cancel. If the yellow face cannot be
 inferred uniquely, reposition the cube for the requested head-on Yellow scan and
 press `SPACE`.
 
-Motor defaults match the current ULN2003 wiring: BCM GPIO 17, 18, 27, and 22
-connect to `IN1`, `IN2`, `IN3`, and `IN4`. Relevant tuning options are
-`--motor-start-rate`, `--motor-cruise-rate`, `--motor-ramp-steps`, and
-`--motor-settle-seconds`. Use `--motor-direction counterclockwise` if the default
-sequence turns the platform the wrong way, and calibrate rotation with
-`--motor-steps-per-revolution` if one physical revolution is not exactly 4096
-half-steps.
+The application always uses OpenCV camera 0 and the ULN2003 platform. Its fixed
+wiring is BCM GPIO 17, 18, 27, and 22 connected to `IN1`, `IN2`, `IN3`, and
+`IN4`. Motor calibration and diagnostic options remain available in the separate
+`src/hardware/stepper_spin.py` utility.
 
 Each capture is stored immediately in `scan_output/cube_state.json`, along with
 `face_U.jpg` through `face_B.jpg`. The JSON contains the 3x3 colour matrix and raw
@@ -164,15 +160,16 @@ colour-count and physical-state validation remain required before solving.
 
 Use the full command to scan, validate, solve, guide, and record one run:
 
-```powershell
-python src/app.py --scan-mode angled-sides --backend auto --device 0 \
-  --output scan_output --database data/solve_history.db
+```bash
+python src/app.py
 ```
 
-The main application defaults to angled scanning, physical validation, solving,
-and guidance. `cube_state.json` records `captured_faces`, `inferred_faces`, and
-whether each face was inferred. A colour-balanced but physically impossible cube
-is rejected so it can be rescanned. A solved cube produces zero moves.
+The main application always runs motorized angled scanning with OpenCV camera 0,
+followed by physical validation, solving, and guidance. It writes scans to
+`scan_output` and history to `data/solve_history.db`. `cube_state.json` records
+`captured_faces`, `inferred_faces`, and whether each face was inferred. A
+colour-balanced but physically impossible cube is rejected so it can be
+rescanned. A solved cube produces zero moves.
 
 Keyboard guidance uses `SPACE` or `N` for next, `B` for back, and `Q` to cancel.
 
@@ -347,7 +344,6 @@ From the repository root:
 python -m unittest discover -s tests -v
 python -m compileall -q src tests
 python src/vision/face_scan.py --help
-python src/app.py --help
 php -l web/api/sessions.php
 php -l web/index.php
 ```
