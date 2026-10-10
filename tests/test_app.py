@@ -15,11 +15,6 @@ from storage.history import SolveHistory, SolveRecord
 from vision.face_scan import ScanOutcome
 
 
-class FakeControls:
-    def show_status(self, _status: str, _detail: str = "") -> None:
-        pass
-
-
 class ApplicationTerminalTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -48,7 +43,6 @@ class ApplicationTerminalTests(unittest.TestCase):
     def patches(self, uploader=None):
         return (
             mock.patch.object(app, "parse_args", return_value=self.arguments),
-            mock.patch.object(app, "SenseHatAdapter", return_value=FakeControls()),
             mock.patch.object(
                 app.HttpSummaryUploader, "from_environment", return_value=uploader
             ),
@@ -56,15 +50,14 @@ class ApplicationTerminalTests(unittest.TestCase):
         )
 
     def test_complete_run_is_recorded(self) -> None:
-        def solved_scan(_camera, _output, validator, _controls, **_kwargs):
+        def solved_scan(_camera, _output, validator, **_kwargs):
             outcome = ScanOutcome(SOLVED_STATE)
             validator(outcome)
             return outcome
 
-        parse, controls, uploader, camera = self.patches()
+        parse, uploader, camera = self.patches()
         with (
             parse,
-            controls,
             uploader,
             camera,
             mock.patch.object(app, "scan_cube", side_effect=solved_scan),
@@ -75,10 +68,9 @@ class ApplicationTerminalTests(unittest.TestCase):
         self.assertEqual(self.row_count(), 1)
 
     def test_scan_cancellation_is_recorded(self) -> None:
-        parse, controls, uploader, camera = self.patches()
+        parse, uploader, camera = self.patches()
         with (
             parse,
-            controls,
             uploader,
             camera,
             mock.patch.object(app, "scan_cube", return_value=None),
@@ -87,11 +79,51 @@ class ApplicationTerminalTests(unittest.TestCase):
         self.assertEqual(self.status(), ("CANCELLED", 0, None))
         self.assertEqual(self.row_count(), 1)
 
-    def test_camera_error_is_recorded_and_returns_failure(self) -> None:
-        parse, controls, uploader, _camera = self.patches()
+    def test_motorized_mode_creates_passes_and_closes_platform(self) -> None:
+        self.arguments.scan_mode = "motorized-angled"
+        self.arguments.motor_in1_pin = 17
+        self.arguments.motor_in2_pin = 18
+        self.arguments.motor_in3_pin = 27
+        self.arguments.motor_in4_pin = 22
+        self.arguments.motor_direction = "clockwise"
+        self.arguments.motor_start_rate = 300
+        self.arguments.motor_cruise_rate = 900
+        self.arguments.motor_ramp_steps = 128
+        self.arguments.motor_steps_per_revolution = 4_096
+        self.arguments.motor_settle_seconds = 1.0
+        platform = mock.Mock()
+
+        parse, uploader, camera = self.patches()
         with (
             parse,
-            controls,
+            uploader,
+            camera,
+            mock.patch.object(
+                app, "create_stepper_platform", return_value=platform
+            ) as create_platform,
+            mock.patch.object(app, "scan_cube", return_value=None) as scan,
+        ):
+            app.main()
+
+        create_platform.assert_called_once_with(
+            in1_pin=17,
+            in2_pin=18,
+            in3_pin=27,
+            in4_pin=22,
+            clockwise=True,
+            start_rate=300,
+            cruise_rate=900,
+            quarter_ramp_steps=128,
+            steps_per_revolution=4_096,
+        )
+        self.assertIs(scan.call_args.kwargs["platform"], platform)
+        self.assertEqual(scan.call_args.kwargs["motor_settle_seconds"], 1.0)
+        platform.close.assert_called_once_with()
+
+    def test_camera_error_is_recorded_and_returns_failure(self) -> None:
+        parse, uploader, _camera = self.patches()
+        with (
+            parse,
             uploader,
             mock.patch.object(
                 app, "create_camera", side_effect=RuntimeError("camera unavailable")
@@ -138,10 +170,9 @@ class ApplicationTerminalTests(unittest.TestCase):
             except BaseException as exc:  # pragma: no cover - assertion reports details
                 failures.append(exc)
 
-        parse, controls, uploader, camera = self.patches(BlockingUploader())
+        parse, uploader, camera = self.patches(BlockingUploader())
         with (
             parse,
-            controls,
             uploader,
             camera,
             mock.patch.object(app, "scan_cube", side_effect=cancelled_scan),

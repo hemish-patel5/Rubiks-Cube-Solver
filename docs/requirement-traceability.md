@@ -6,10 +6,10 @@ human/team check.
 
 | Requirement | Implementation | Automated verification | Target evidence/status |
 |---|---|---|---|
-| FR-01 session controls | Scanner and guidance keyboard/Sense HAT controls | cancellation and terminal-record tests | Restart and physical controls: pending physical |
+| FR-01 session controls | Scanner and guidance keyboard controls | cancellation and terminal-record tests | Restart and physical controls: pending physical |
 | FR-02 angled views and safe D fallback | `src/vision/face_scan.py` angled workflow and physical reconstruction | angled capture, reconstruction, ambiguity, and validation tests | Ten physical sessions: pending physical |
 | FR-03 sticker classification | LAB calibration and OpenCV sampling | scanner classification tests | >=95% of at least 450 visible classifications: pending physical |
-| FR-04 order/orientation guidance | OpenCV overlays and Sense HAT status | scanner workflow tests | User observation: pending review |
+| FR-04 order/orientation guidance | OpenCV overlays and keyboard controls | scanner workflow tests | User observation: pending review |
 | FR-05 rejection/rescan | colour-count and Kociemba validation | invalid/incomplete/impossible-state tests | Physical invalid cube: pending physical |
 | FR-06 solving | Kociemba adapter | solved, valid scramble, and invalid-state tests | Complete physical scramble: pending physical |
 | FR-07 progress and moves | OpenCV scanner and move-guidance interface | guidance/control tests | Five-minute demonstration: pending physical |

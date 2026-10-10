@@ -54,7 +54,7 @@ python src/vision/face_scan.py --help
 
 Expected results:
 
-- The test suite reports `Ran 45 tests` followed by `OK`.
+- The test suite reports `Ran 54 tests` followed by `OK` (one PHP CLI test may be skipped when PHP is unavailable).
 - One dashboard contract test may be skipped if PHP CLI is not installed.
 - Compilation completes without an error.
 - Both help commands display their options without raising an exception.
@@ -102,7 +102,7 @@ Expected flow:
 4. The complete six-face cube is validated before a solution is produced.
 5. Move guidance begins only after a valid scan.
 
-Also verify capture, back/reset, cancellation, Sense HAT controls, previous/next move navigation, and one complete physical solve.
+Also verify keyboard capture, back/reset, cancellation, previous/next move navigation, and one complete physical solve.
 
 ## 5. Test background synchronisation
 
@@ -133,7 +133,7 @@ Send the team:
 - Tester name, date, and tested commit.
 - Raspberry Pi model, camera/backend, lighting conditions, and other equipment.
 - Automated test result, including any failure or skipped test.
-- Pass/fail results for camera capture, Sense HAT controls, cancellation, full solve, and yellow-face fallback.
+- Pass/fail results for camera capture, keyboard controls, cancellation, full solve, and yellow-face fallback.
 - Evidence that the offline row was `synced=0`, then became `synced=1` and appeared on the dashboard after reconnection.
 - Confirmation that the camera and controls stayed responsive while the server was offline.
 - Exact error messages and reproduction steps for every failure.

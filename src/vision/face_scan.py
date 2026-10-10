@@ -11,7 +11,6 @@ from __future__ import annotations
 import argparse
 import itertools
 import json
-import sys
 import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -98,10 +97,12 @@ class Camera(Protocol):
     def close(self) -> None: ...
 
 
-class ScannerControls(Protocol):
-    def poll_scanner_action(self) -> str | None: ...
+class RotatingPlatform(Protocol):
+    def rotate_next_quarter(self) -> int: ...
 
-    def show_status(self, status: str, detail: str = "") -> None: ...
+    def return_home(self) -> int: ...
+
+    def close(self) -> None: ...
 
 
 class OpenCVCamera:
@@ -689,6 +690,7 @@ def draw_angled_status(
     stage_index: int,
     captured: dict[str, list[SampleResult]],
     message: str,
+    motorized: bool = False,
 ) -> None:
     side = ANGLED_SIDE_SEQUENCE[stage_index]
     cv2.rectangle(frame, (0, 0), (FRAME_WIDTH, 72), (0, 0, 0), -1)
@@ -699,10 +701,15 @@ def draw_angled_status(
                 (255, 255, 255), 2, cv2.LINE_AA)
     cv2.putText(frame, message, (12, 56), cv2.FONT_HERSHEY_SIMPLEX, 0.45,
                 (100, 230, 255), 1, cv2.LINE_AA)
-    footer = (
-        f"Saved: {' '.join(captured) or '-'} | SPACE capture | B back | "
-        "R reset | Q quit"
-    )
+    if motorized and captured:
+        footer = f"Saved: {' '.join(captured)} | AUTO capture | R restart | Q quit"
+    elif motorized:
+        footer = "Align GREEN + WHITE | SPACE start | R reset | Q quit"
+    else:
+        footer = (
+            f"Saved: {' '.join(captured) or '-'} | SPACE capture | B back | "
+            "R reset | Q quit"
+        )
     cv2.rectangle(frame, (0, FRAME_HEIGHT - 34), (FRAME_WIDTH, FRAME_HEIGHT),
                   (0, 0, 0), -1)
     cv2.putText(frame, footer, (10, FRAME_HEIGHT - 12),
@@ -765,16 +772,12 @@ def run_scanner(
     output_dir: Path,
     validate_outcome: Callable[[ScanOutcome], None] | None = None,
     exit_on_valid: bool = False,
-    controls: ScannerControls | None = None,
 ) -> ScanOutcome | None:
     captured: dict[str, list[SampleResult]] = {}
     face_index = 0
     message = "Fill the grid with the cube face, then press SPACE"
     last_preview = 0.0
     preview_colours: list[str] | None = None
-
-    if controls is not None:
-        controls.show_status("scanning", FACE_SEQUENCE[0].notation)
 
     try:
         while True:
@@ -792,19 +795,14 @@ def run_scanner(
             draw_status(display_frame, face_index, captured, message)
             cv2.imshow("Rubik's Cube 3x3 Scanner", display_frame)
             key = cv2.waitKey(1) & 0xFF
-            joystick_action = (
-                controls.poll_scanner_action() if controls is not None else None
-            )
 
-            if key == ord("q") or joystick_action == "cancel":
+            if key == ord("q"):
                 return None
-            if key == ord("r") or joystick_action == "reset":
+            if key == ord("r"):
                 captured.clear()
                 face_index = 0
                 message = "Scan reset"
-                if controls is not None:
-                    controls.show_status("scanning", FACE_SEQUENCE[0].notation)
-            elif key == ord("b") or joystick_action == "back":
+            elif key == ord("b"):
                 if face_index > 0:
                     face_index -= 1
                     removed = FACE_SEQUENCE[face_index].notation
@@ -814,11 +812,7 @@ def run_scanner(
                         captured.pop(later.notation, None)
                     message = f"Rescan face {removed}"
                     save_state(captured, output_dir)
-                    if controls is not None:
-                        controls.show_status("scanning", removed)
-            elif (
-                key == ord(" ") or joystick_action == "capture"
-            ) and face_index < len(FACE_SEQUENCE):
+            elif key == ord(" ") and face_index < len(FACE_SEQUENCE):
                 face = FACE_SEQUENCE[face_index]
                 samples = sample_grid(frame)
                 captured[face.notation] = samples
@@ -827,8 +821,6 @@ def run_scanner(
                 cv2.imwrite(str(image_path), frame)
                 state_path = save_state(captured, output_dir)
                 face_index += 1
-                if controls is not None:
-                    controls.show_status("accepted", face.notation)
 
                 if face_index == len(FACE_SEQUENCE):
                     state = build_state(captured)
@@ -836,25 +828,17 @@ def run_scanner(
                     if outcome is not None:
                         try:
                             if validate_outcome is not None:
-                                if controls is not None:
-                                    controls.show_status("calculating")
                                 validate_outcome(outcome)
                         except ValueError as exc:
                             message = f"Invalid cube: {exc}. Press B to rescan"
-                            if controls is not None:
-                                controls.show_status("error")
                         else:
                             message = f"Complete and valid - saved to {state_path}"
                             print(json.dumps(state, indent=2))
-                            if controls is not None:
-                                controls.show_status("complete")
                             if exit_on_valid:
                                 return outcome
                     else:
                         problems = state["validation_problems"]
                         message = "Check/rescan: " + "; ".join(problems)  # type: ignore[arg-type]
-                        if controls is not None:
-                            controls.show_status("error")
                         print(json.dumps(state, indent=2))
                 else:
                     message = f"Saved {face.notation}; rotate to the next instructed face"
@@ -868,7 +852,6 @@ def run_angled_scanner(
     output_dir: Path,
     validate_outcome: Callable[[ScanOutcome], None] | None = None,
     exit_on_valid: bool = True,
-    controls: ScannerControls | None = None,
 ) -> ScanOutcome | None:
     """Capture four angled views, inferring D or requesting a fallback scan."""
     captured: dict[str, list[SampleResult]] = {}
@@ -878,9 +861,6 @@ def run_angled_scanner(
     last_preview = 0.0
     side_preview: list[str] | None = None
     top_preview: list[str] | None = None
-    if controls is not None:
-        controls.show_status("scanning", "F+U")
-
     try:
         while True:
             frame = camera.read()
@@ -912,20 +892,15 @@ def run_angled_scanner(
                 draw_angled_status(display_frame, stage_index, captured, message)
             cv2.imshow("Rubik's Cube Angled Scanner", display_frame)
             key = cv2.waitKey(1) & 0xFF
-            joystick_action = (
-                controls.poll_scanner_action() if controls is not None else None
-            )
 
-            if key == ord("q") or joystick_action == "cancel":
+            if key == ord("q"):
                 return None
-            if key == ord("r") or joystick_action == "reset":
+            if key == ord("r"):
                 captured.clear()
                 stage_index = 0
                 bottom_required = False
                 message = "Scan reset; align GREEN front and WHITE top"
-                if controls is not None:
-                    controls.show_status("scanning", "F+U")
-            elif key == ord("b") or joystick_action == "back":
+            elif key == ord("b"):
                 if bottom_required:
                     bottom_required = False
                     stage_index = len(ANGLED_SIDE_SEQUENCE) - 1
@@ -943,9 +918,7 @@ def run_angled_scanner(
                         captured.pop("U", None)
                     save_state(captured, output_dir)
                     message = f"Rescan {removed.colour.upper()} front"
-                    if controls is not None:
-                        controls.show_status("scanning", removed.notation)
-            elif key == ord(" ") or joystick_action == "capture":
+            elif key == ord(" "):
                 if bottom_required:
                     captured["D"] = sample_grid(frame)
                     output_dir.mkdir(parents=True, exist_ok=True)
@@ -956,25 +929,17 @@ def run_angled_scanner(
                         captured.pop("D", None)
                         save_state(captured, output_dir)
                         message = "Yellow scan has invalid colour counts; rescan it or press B"
-                        if controls is not None:
-                            controls.show_status("error")
                         continue
                     try:
                         if validate_outcome is not None:
-                            if controls is not None:
-                                controls.show_status("calculating")
                             validate_outcome(outcome)
                     except ValueError as exc:
                         captured.pop("D", None)
                         save_state(captured, output_dir)
                         message = f"Invalid cube: {exc}; rescan YELLOW or press B"
-                        if controls is not None:
-                            controls.show_status("error")
                         continue
                     print("Angled capture complete with a scanned D fallback.")
                     print(f"Saved state: {state_path}")
-                    if controls is not None:
-                        controls.show_status("complete")
                     return outcome
 
                 side = ANGLED_SIDE_SEQUENCE[stage_index]
@@ -1001,8 +966,6 @@ def run_angled_scanner(
                     captured, output_dir, infer_bottom=final_stage
                 )
                 stage_index += 1
-                if controls is not None:
-                    controls.show_status("accepted", side.notation)
 
                 if stage_index == len(ANGLED_SIDE_SEQUENCE):
                     state = build_state(captured, infer_bottom=True)
@@ -1012,25 +975,17 @@ def run_angled_scanner(
                         bottom_required = True
                         message = "D is not uniquely inferable; scan YELLOW with GREEN at top"
                         save_state(captured, output_dir)
-                        if controls is not None:
-                            controls.show_status("scanning", "D")
                         continue
                     try:
                         if validate_outcome is not None:
-                            if controls is not None:
-                                controls.show_status("calculating")
                             validate_outcome(outcome)
                     except ValueError as exc:
                         message = f"Inference rejected ({exc}); scan YELLOW with GREEN at top"
                         bottom_required = True
                         save_state(captured, output_dir)
-                        if controls is not None:
-                            controls.show_status("scanning", "D")
                         continue
                     print("Angled capture complete: D inferred from U, F, R, B, L.")
                     print(f"Saved state: {state_path}")
-                    if controls is not None:
-                        controls.show_status("complete")
                     return outcome
 
                 next_side = ANGLED_SIDE_SEQUENCE[stage_index]
@@ -1038,9 +993,190 @@ def run_angled_scanner(
                     f"Saved {side.notation}; rotate cube to "
                     f"{next_side.colour.upper()} front, keep WHITE top"
                 )
-                if controls is not None:
-                    controls.show_status("scanning", next_side.notation)
     finally:
+        camera.close()
+        cv2.destroyAllWindows()
+
+
+def run_motorized_angled_scanner(
+    camera: Camera,
+    output_dir: Path,
+    platform: RotatingPlatform,
+    validate_outcome: Callable[[ScanOutcome], None] | None = None,
+    settle_seconds: float = 1.0,
+) -> ScanOutcome | None:
+    """Capture U/F, R, B, L automatically between calibrated quarter turns."""
+    if settle_seconds < 0:
+        raise ValueError("settle_seconds must not be negative")
+
+    captured: dict[str, list[SampleResult]] = {}
+    stage_index = 0
+    automatic_capture_at: float | None = None
+    bottom_required = False
+    message = "Align GREEN front and WHITE top, then press SPACE once"
+    last_preview = 0.0
+    side_preview: list[str] | None = None
+    top_preview: list[str] | None = None
+
+    try:
+        while True:
+            frame = camera.read()
+            now = time.monotonic()
+            display_frame = frame.copy()
+            references = centre_references(captured)
+
+            if bottom_required:
+                if now - last_preview >= 0.15:
+                    side_preview = classify_samples(sample_grid(frame), references)
+                    last_preview = now
+                draw_grid(display_frame, side_preview)
+                draw_bottom_status(display_frame, captured, message)
+            else:
+                if now - last_preview >= 0.15:
+                    live_side, _ = sample_angled_face(frame, ANGLED_FRONT_QUAD)
+                    live_top, _ = sample_angled_face(frame, ANGLED_TOP_QUAD)
+                    side_preview = classify_samples(live_side, references)
+                    top_preview = classify_samples(live_top, references)
+                    last_preview = now
+                side = ANGLED_SIDE_SEQUENCE[stage_index]
+                draw_perspective_grid(
+                    display_frame,
+                    ANGLED_TOP_QUAD,
+                    "U",
+                    DISPLAY_BGR["white"],
+                    top_preview,
+                )
+                draw_perspective_grid(
+                    display_frame,
+                    ANGLED_FRONT_QUAD,
+                    side.notation,
+                    DISPLAY_BGR[side.colour],
+                    side_preview,
+                )
+                draw_angled_status(
+                    display_frame, stage_index, captured, message, motorized=True
+                )
+
+            cv2.imshow("Rubik's Cube Motorized Scanner", display_frame)
+            key = cv2.waitKey(1) & 0xFF
+
+            if key == ord("q"):
+                platform.return_home()
+                return None
+
+            if key in (ord("r"), ord("b")):
+                platform.return_home()
+                captured.clear()
+                stage_index = 0
+                automatic_capture_at = None
+                bottom_required = False
+                message = "Scan reset; align GREEN front and WHITE top, then press SPACE"
+                save_state(captured, output_dir)
+                continue
+
+            if bottom_required:
+                if key != ord(" "):
+                    continue
+                captured["D"] = sample_grid(frame)
+                output_dir.mkdir(parents=True, exist_ok=True)
+                cv2.imwrite(str(output_dir / "face_D.jpg"), frame)
+                state_path = save_state(captured, output_dir)
+                outcome = build_scan_outcome(captured)
+                if outcome is None:
+                    captured.pop("D", None)
+                    save_state(captured, output_dir)
+                    message = "Yellow scan has invalid colour counts; rescan it"
+                    continue
+                try:
+                    if validate_outcome is not None:
+                        validate_outcome(outcome)
+                except ValueError as exc:
+                    captured.pop("D", None)
+                    save_state(captured, output_dir)
+                    message = f"Invalid cube: {exc}; rescan YELLOW"
+                    continue
+                print("Motorized capture complete with a scanned D fallback.")
+                print(f"Saved state: {state_path}")
+                return outcome
+
+            capture_due = (
+                automatic_capture_at is not None and now >= automatic_capture_at
+            )
+            first_capture_requested = stage_index == 0 and key == ord(" ")
+            if not (capture_due or first_capture_requested):
+                continue
+
+            side = ANGLED_SIDE_SEQUENCE[stage_index]
+            side_samples, side_image = sample_angled_face(frame, ANGLED_FRONT_QUAD)
+            captured[side.notation] = side_samples
+            output_dir.mkdir(parents=True, exist_ok=True)
+            cv2.imwrite(str(output_dir / f"face_{side.notation}.jpg"), side_image)
+
+            if stage_index == 0:
+                top_samples, top_image = sample_angled_face(frame, ANGLED_TOP_QUAD)
+                captured["U"] = top_samples
+                cv2.imwrite(str(output_dir / "face_U.jpg"), top_image)
+
+            cv2.imwrite(
+                str(output_dir / f"capture_{stage_index + 1}_{side.colour}.jpg"),
+                frame,
+            )
+            final_stage = stage_index == len(ANGLED_SIDE_SEQUENCE) - 1
+            state_path = save_state(captured, output_dir, infer_bottom=final_stage)
+            stage_index += 1
+            automatic_capture_at = None
+
+            message = f"Saved {side.colour.upper()}; rotating platform"
+            draw_angled_status(
+                display_frame,
+                min(stage_index - 1, len(ANGLED_SIDE_SEQUENCE) - 1),
+                captured,
+                message,
+                motorized=True,
+            )
+            cv2.imshow("Rubik's Cube Motorized Scanner", display_frame)
+            cv2.waitKey(1)
+            platform.rotate_next_quarter()
+
+            if stage_index == len(ANGLED_SIDE_SEQUENCE):
+                state = build_state(captured, infer_bottom=True)
+                outcome = build_scan_outcome(captured, infer_bottom=True)
+                print(json.dumps(state, indent=2))
+                if outcome is None:
+                    bottom_required = True
+                    message = (
+                        "Platform returned to GREEN. D is ambiguous; "
+                        "scan YELLOW with GREEN at top"
+                    )
+                    save_state(captured, output_dir)
+                    continue
+                try:
+                    if validate_outcome is not None:
+                        validate_outcome(outcome)
+                except ValueError as exc:
+                    bottom_required = True
+                    message = (
+                        f"Platform returned to GREEN. Inference rejected ({exc}); "
+                        "scan YELLOW"
+                    )
+                    save_state(captured, output_dir)
+                    continue
+                print("Motorized capture complete: platform returned to GREEN.")
+                print(f"Saved state: {state_path}")
+                return outcome
+
+            next_side = ANGLED_SIDE_SEQUENCE[stage_index]
+            message = (
+                f"At {next_side.colour.upper()}; settling for "
+                f"{settle_seconds:g} second(s) before automatic capture"
+            )
+            automatic_capture_at = time.monotonic() + settle_seconds
+    finally:
+        try:
+            platform.return_home()
+        except Exception:
+            # The original motor/camera error remains the useful failure.
+            pass
         camera.close()
         cv2.destroyAllWindows()
 
@@ -1049,24 +1185,33 @@ def scan_cube(
     camera: Camera,
     output_dir: Path,
     validate_outcome: Callable[[ScanOutcome], None],
-    controls: ScannerControls | None = None,
     mode: str = "angled-sides",
+    platform: RotatingPlatform | None = None,
+    motor_settle_seconds: float = 1.0,
 ) -> ScanOutcome | None:
     """Scan until a valid cube is accepted or the user cancels."""
+    if mode == "motorized-angled":
+        if platform is None:
+            raise ValueError("motorized-angled mode requires a rotating platform")
+        return run_motorized_angled_scanner(
+            camera,
+            output_dir,
+            platform,
+            validate_outcome=validate_outcome,
+            settle_seconds=motor_settle_seconds,
+        )
     if mode == "angled-sides":
         return run_angled_scanner(
             camera,
             output_dir,
             validate_outcome=validate_outcome,
             exit_on_valid=True,
-            controls=controls,
         )
     return run_scanner(
         camera,
         output_dir,
         validate_outcome=validate_outcome,
         exit_on_valid=True,
-        controls=controls,
     )
 
 
@@ -1074,11 +1219,11 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--mode",
-        choices=("head-on", "angled-sides"),
+        choices=("head-on", "angled-sides", "motorized-angled"),
         default="angled-sides",
         help=(
-            "angled-sides captures U+F, then R, B, L and infers D; head-on scans "
-            "all six faces"
+            "motorized-angled rotates automatically; angled-sides rotates manually; "
+            "head-on scans all six faces"
         ),
     )
     parser.add_argument(
@@ -1096,26 +1241,58 @@ def parse_args() -> argparse.Namespace:
         default=Path("scan_output"),
         help="directory for cube_state.json and six face images",
     )
+    parser.add_argument("--motor-in1-pin", type=int, default=17)
+    parser.add_argument("--motor-in2-pin", type=int, default=18)
+    parser.add_argument("--motor-in3-pin", type=int, default=27)
+    parser.add_argument("--motor-in4-pin", type=int, default=22)
+    parser.add_argument(
+        "--motor-direction",
+        choices=("clockwise", "counterclockwise"),
+        default="clockwise",
+    )
+    parser.add_argument("--motor-steps-per-revolution", type=int, default=4_096)
+    parser.add_argument("--motor-settle-seconds", type=float, default=1.0)
     return parser.parse_args()
 
 
 def main() -> None:
-    if str(Path(__file__).parents[1]) not in sys.path:
-        sys.path.insert(0, str(Path(__file__).parents[1]))
-    from hardware.sense_hat_adapter import SenseHatAdapter
-
     args = parse_args()
-    controls = SenseHatAdapter()
-    controls.show_status("ready")
+    platform = None
+    if args.mode == "motorized-angled":
+        from hardware.stepper_spin import create_stepper_platform
+
+        try:
+            platform = create_stepper_platform(
+                in1_pin=args.motor_in1_pin,
+                in2_pin=args.motor_in2_pin,
+                in3_pin=args.motor_in3_pin,
+                in4_pin=args.motor_in4_pin,
+                clockwise=args.motor_direction == "clockwise",
+                steps_per_revolution=args.motor_steps_per_revolution,
+            )
+        except Exception as exc:
+            raise SystemExit(f"Platform error: {exc}") from exc
     try:
         camera = create_camera(args.backend, args.device)
     except RuntimeError as exc:
-        controls.show_status("error")
+        if platform is not None:
+            platform.close()
         raise SystemExit(f"Camera error: {exc}") from exc
-    if args.mode == "angled-sides":
-        run_angled_scanner(camera, args.output, controls=controls)
-    else:
-        run_scanner(camera, args.output, controls=controls)
+    try:
+        if args.mode == "motorized-angled":
+            run_motorized_angled_scanner(
+                camera,
+                args.output,
+                platform,
+                settle_seconds=args.motor_settle_seconds,
+            )
+        elif args.mode == "angled-sides":
+            run_angled_scanner(camera, args.output)
+        else:
+            run_scanner(camera, args.output)
+    finally:
+        if platform is not None:
+            platform.close()
 
 
 if __name__ == "__main__":

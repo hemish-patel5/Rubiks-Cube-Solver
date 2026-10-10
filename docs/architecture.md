@@ -8,7 +8,8 @@ communication.
 ```mermaid
 flowchart LR
     Camera[Camera / OpenCV] --> Main[Main workflow thread]
-    Sense[Sense HAT] <--> Main
+    Keyboard[Keyboard controls] --> Main
+    Main <--> Platform[ULN2003 four-input rotating platform]
     Main --> Solver[Validation and Kociemba]
     Main --> SQLite[(SQLite solve history)]
     Main -. wake event .-> Worker[remote-sync worker]

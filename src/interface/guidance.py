@@ -1,9 +1,8 @@
-"""Simple OpenCV move guidance with keyboard and Sense HAT navigation."""
+"""Simple OpenCV move guidance with keyboard navigation."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol
 
 from vision.qt_runtime import configure_opencv_display
 
@@ -11,12 +10,6 @@ configure_opencv_display()
 
 import cv2
 import numpy as np
-
-
-class GuidanceControls(Protocol):
-    def poll_guidance_action(self) -> str | None: ...
-
-    def show_status(self, status: str, detail: str = "") -> None: ...
 
 
 @dataclass
@@ -75,31 +68,26 @@ def _keyboard_action(key: int) -> str | None:
     return None
 
 
-def show_guidance(moves: list[str], controls: GuidanceControls) -> str:
+def show_guidance(moves: list[str]) -> str:
     """Show moves until the user completes or cancels guidance."""
     navigator = MoveNavigator(tuple(moves))
     if navigator.current is None:
-        controls.show_status("complete")
         cv2.imshow("Rubik's Cube Solution", draw_guidance(navigator))
         cv2.waitKey(500)
         cv2.destroyWindow("Rubik's Cube Solution")
         return "COMPLETE"
 
     try:
-        controls.show_status("move", navigator.current)
         while True:
             cv2.imshow("Rubik's Cube Solution", draw_guidance(navigator))
             key = cv2.waitKeyEx(50)
-            action = controls.poll_guidance_action() or _keyboard_action(key)
+            action = _keyboard_action(key)
             if action == "cancel":
                 return "CANCELLED"
             if action == "back":
                 navigator.back()
-                controls.show_status("move", navigator.current or "")
             elif action == "next":
                 if navigator.next():
-                    controls.show_status("complete")
                     return "COMPLETE"
-                controls.show_status("move", navigator.current or "")
     finally:
         cv2.destroyWindow("Rubik's Cube Solution")

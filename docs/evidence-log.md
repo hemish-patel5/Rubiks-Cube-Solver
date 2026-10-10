@@ -8,7 +8,7 @@ placing API keys, private messages, or private database content in evidence capt
 | Evidence ID | Date/time | Commit | Tester | Equipment/environment | Requirement(s) | Preconditions and steps | Expected | Actual measurement/result | Pass? | Artefact path/link |
 |---|---|---|---|---|---|---|---|---|---|---|
 | EV-AUTO-001 | 4 Oct 2026 | Feature working tree based on `c737ac3` | Codex, for team review | macOS development machine; project Python environment | NFR-05, NFR-07 | Run unit suite, Ruff format/lint, scoped mypy, compileall, CLI help, and whitespace check | All available checks pass | 45 tests passed; 1 live-dashboard test skipped because PHP CLI is not installed; Ruff, scoped mypy, compileall, CLI help, and `git diff --check` passed | Partial: PHP and target hardware remain pending | Retain terminal/PR check output with final branch review |
-| EV-PI-001 |  |  |  | Raspberry Pi, camera, Sense HAT, controlled lighting | FR-01 to FR-08 | Complete scan-to-guidance workflow | Valid solution and one local terminal row |  |  |  |
+| EV-PI-001 |  |  |  | Raspberry Pi, camera, rotating platform, controlled lighting | FR-01 to FR-08 | Complete scan-to-guidance workflow | Valid solution and one local terminal row |  |  |  |
 | EV-LAMP-001 |  |  |  | Pi plus live LAMP host | FR-09, NFR-06, NFR-07 | Start offline, complete run, restore server, retry | UI remains responsive; row stays local then uploads once |  |  |  |
 | EV-DEMO-001 |  |  |  | Presentation setup | All | Rehearse the five-minute scenario | Complete, clear demonstration within five minutes |  |  |  |
 
@@ -52,7 +52,7 @@ Every individual duration must be below five seconds to satisfy the stated requi
 
 - [ ] Ambiguous hidden face requests a direct yellow-face scan.
 - [ ] Invalid or physically impossible cube is rejected before solving.
-- [ ] Camera and Sense HAT controls work on the Raspberry Pi.
+- [ ] Camera and keyboard controls work on the Raspberry Pi.
 - [ ] Full known scramble is scanned, solved, and guided to completion.
 - [ ] Cancel creates exactly one `CANCELLED` local row.
 - [ ] A new session can be started after cancellation/completion.

@@ -6,7 +6,7 @@ This repository contains the source code, documentation, and hardware resources 
 
 The project aims to develop a **Raspberry Pi-based Rubik's Cube Scanning and Solving Assistant** that uses computer vision to recognise the colours on a standard 3×3 Rubik's Cube, validate the cube state, calculate a solution, and guide the user through the required solving moves.
 
-The system focuses on reliable colour recognition using OpenCV under controlled lighting conditions. As an optional extension, a motorised platform may be developed to automatically rotate the cube between scans.
+The system focuses on reliable colour recognition using OpenCV under controlled lighting conditions. A motorised platform can automatically rotate the cube between angled scans.
 
 ---
 
@@ -30,8 +30,7 @@ The system will:
 - Display step-by-step solving instructions to the user.
 - Record solve history and statistics in an SQLite database.
 - Display solve history and statistics through a web dashboard.
-- Provide user feedback using the Raspberry Pi Sense HAT.
-- Optionally rotate the cube automatically using a servo or stepper motor.
+- Rotate the cube automatically between angled scans using the stepper platform.
 
 ---
 
@@ -41,21 +40,20 @@ The system will:
 
 - Live camera preview using a USB webcam or Raspberry Pi camera
 - Four-position angled scanning with physical bottom-face reconstruction and fallback
+- Automatic stepper rotation and capture at Green, Red, Blue, and Orange positions
 - Per-session colour calibration from visible centre stickers
 - Colour-count validation and a solver-ready URFDLB facelet string
 - Incremental JSON storage of colours, raw BGR/HSV samples, and face images
 - Kociemba 1.2.1 physical-state validation and 3x3 solutions
 - OpenCV next/back/cancel move guidance
-- Sense HAT LED status and joystick controls with a laptop fallback
 - SQLite terminal history and retryable summary synchronization
 - Background LAMP synchronization that does not block scanning or guidance
 - Plain PHP/MySQL JSON endpoint and responsive dashboard with session removal
 
 ### Planned
 
-- Raspberry Pi camera and Sense HAT acceptance testing
+- Raspberry Pi camera acceptance testing
 - Live LAMP deployment, HTTPS, upload/retry, and browser acceptance
-- Optional motorised rotating platform
 
 ---
 
@@ -115,6 +113,35 @@ head-on yellow scan with green at the top. This fallback prevents the solver fro
 using an arbitrary completion. The original workflow remains available with
 `--mode head-on`.
 
+### Motorized angled scanner
+
+Start with White on top and Green facing the camera, aligned with both guides:
+
+```bash
+python src/app.py --scan-mode motorized-angled --backend opencv --device 0 \
+  --output scan_output --database data/solve_history.db
+```
+
+Press `SPACE` once to capture Green and White. The application then rotates and
+captures Red, Blue, and Orange automatically. Every movement accelerates for 128
+half-steps, cruises at up to 900 half-steps per second, decelerates for the final
+128 half-steps, and waits one second before capturing. After Orange, the fourth
+movement returns the platform to Green. Each nominal 90-degree movement is 1024
+half-steps.
+
+Use `R` or `B` to abandon the current automatic sequence, return to Green, and
+start again. Use `Q` to return home and cancel. If the yellow face cannot be
+inferred uniquely, reposition the cube for the requested head-on Yellow scan and
+press `SPACE`.
+
+Motor defaults match the current ULN2003 wiring: BCM GPIO 17, 18, 27, and 22
+connect to `IN1`, `IN2`, `IN3`, and `IN4`. Relevant tuning options are
+`--motor-start-rate`, `--motor-cruise-rate`, `--motor-ramp-steps`, and
+`--motor-settle-seconds`. Use `--motor-direction counterclockwise` if the default
+sequence turns the platform the wrong way, and calibrate rotation with
+`--motor-steps-per-revolution` if one physical revolution is not exactly 4096
+half-steps.
+
 Each capture is stored immediately in `scan_output/cube_state.json`, along with
 `face_U.jpg` through `face_B.jpg`. The JSON contains the 3x3 colour matrix and raw
 BGR/HSV values for every sticker. After face six it also contains a 54-character
@@ -148,16 +175,6 @@ whether each face was inferred. A colour-balanced but physically impossible cube
 is rejected so it can be rescanned. A solved cube produces zero moves.
 
 Keyboard guidance uses `SPACE` or `N` for next, `B` for back, and `Q` to cancel.
-Sense HAT controls are:
-
-| Context | Joystick controls |
-|---|---|
-| Scanner | middle capture, left back, down reset, up cancel |
-| Guidance | right/middle next, left back, up cancel |
-
-If Sense HAT is unavailable, the application continues with keyboard controls.
-The LED matrix mirrors ready, scanning, accepted, error, calculating, current
-move, and complete states when hardware is present.
 
 Every run writes one `COMPLETE`, `ERROR`, or `CANCELLED` row to SQLite before any
 remote attempt. To enable best-effort LAMP synchronization, set `RUBIKS_SYNC_URL`
@@ -170,6 +187,40 @@ Only allowlisted terminal summaries leave the device—never face images, raw
 BGR/HSV samples, calibration evidence, or local paths. See
 [`docs/lamp-deployment.md`](docs/lamp-deployment.md) for server configuration and
 the live acceptance checklist.
+
+### Testing the rotating platform
+
+The short ULN2003 test rotates 90 degrees quickly, pauses for one second, and
+repeats until you press `Ctrl+C`:
+
+```bash
+python src/hardware/uln2003_quarter_test.py
+```
+
+The controller sends the ULN2003 eight-state half-step sequence and defaults to
+4096 half-steps per output revolution, so each quarter turn uses 1024. It ramps
+from 300 to 900 half-steps per second and slows again before stopping. The coils
+remain energized during the one-second pause to hold the platform, then all four
+inputs turn off when the program exits.
+
+For adjustable testing, run `python src/hardware/stepper_spin.py`. It performs
+the same repeating quarter turns by default. Add `--continuous` for continuous
+rotation, `--steps 128` for a short finite movement, or
+`--direction counterclockwise` to reverse it.
+
+Wire the ULN2003 with BCM numbering as follows:
+
+| Raspberry Pi | Physical pin | ULN2003 |
+|---|---:|---|
+| GPIO17 | 11 | IN1 |
+| GPIO18 | 12 | IN2 |
+| GPIO27 | 13 | IN3 |
+| GPIO22 | 15 | IN4 |
+| 5 V | 2 or 4 | + / 5-12V |
+| GND | 6 | - / GND |
+
+Plug the stepper motor into the ULN2003 motor socket. Do not connect the motor
+coils directly to Raspberry Pi GPIO pins.
 
 The dashboard lists sessions in pages of 25 with a **Remove** button on each row.
 The API key is configured directly in server-side PHP and must match Apache's
@@ -188,7 +239,6 @@ recreate its server record.
 
 - Raspberry Pi
 - Raspberry Pi Camera Module (or USB Webcam)
-- Raspberry Pi Sense HAT
 - Rubik's Cube
 - Fixed LED lighting
 - Cube stand
@@ -218,7 +268,7 @@ rubiks-cube-assistant/
 ├── src/
 │   ├── app.py              # Full 3x3 workflow
 │   ├── cube/solver.py      # Kociemba adapter
-│   ├── hardware/           # Optional Sense HAT adapter
+│   ├── hardware/           # Stepper platform controller
 │   ├── interface/          # OpenCV move guidance
 │   ├── storage/            # SQLite history and HTTP sync
 │   └── vision/face_scan.py # Existing fixed-grid LAB scanner
@@ -261,7 +311,6 @@ rubiks-cube-assistant/
 
 ## Phase 5 – Embedded Features
 
-- [x] Sense HAT adapter with no-hardware fallback
 - [x] SQLite terminal history
 - [x] LAMP code and local security/data contract tests
 - [x] Background LAMP synchronization with bounded shutdown
@@ -269,7 +318,7 @@ rubiks-cube-assistant/
 
 ## Phase 6 – Optional Extension
 
-- [ ] Motorised cube rotation platform
+- [x] Motorised cube rotation and automatic angled capture workflow
 
 ---
 
@@ -283,10 +332,11 @@ Current progress:
 - ✅ Repository created
 - ✅ Development environment being configured
 - ✅ Existing OpenCV/LAB team scanner preserved
-- ✅ 3x3 solver, move guidance, Sense HAT adapter, and SQLite history implemented
+- ✅ 3x3 solver, keyboard move guidance, and SQLite history implemented
 - ✅ LAMP schema, authenticated write endpoint, and dashboard with session removal implemented
 - ✅ Remote upload/retry isolated from the camera and UI in a tested background thread
-- ⏳ Raspberry Pi camera, Sense HAT, physical solve, and performance acceptance
+- ✅ Stepper platform integrated with automatic four-position scanning
+- ⏳ Raspberry Pi camera, physical solve, and performance acceptance
 - ⏳ Live MySQL migration, HTTPS, authenticated upload/retry, and browser verification
 
 ## Local verification

@@ -1,2 +1,0 @@
-[console_scripts]
-cube-assistant = cube_assistant.cli:main
