@@ -50,3 +50,6 @@ Thumbs.db
 *.flv
 *.mov
 *.wmv
+
+# Local Python virtual environment
+.venv/

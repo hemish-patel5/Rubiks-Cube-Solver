@@ -27,6 +27,11 @@ configure_opencv_display()
 import cv2
 import numpy as np
 
+if __package__:
+    from .scanner_ui import draw_scanner_chrome, scanner_key
+else:
+    from scanner_ui import draw_scanner_chrome, scanner_key
+
 
 @dataclass(frozen=True)
 class SampleResult:
@@ -610,27 +615,10 @@ def draw_grid(
         cv2.line(frame, (x, start_y), (x, start_y + FACE_SIZE), (255, 255, 255), 1)
         cv2.line(frame, (start_x, y), (start_x + FACE_SIZE, y), (255, 255, 255), 1)
 
-    for index, (row, column, centre_x, centre_y) in enumerate(get_grid_centres()):
-        half = SAMPLE_SIZE // 2
+    for index, (_, _, centre_x, centre_y) in enumerate(get_grid_centres()):
         colour_name = preview_colours[index] if preview_colours else "unknown"
         draw_colour = DISPLAY_BGR.get(colour_name, DISPLAY_BGR["unknown"])
-        cv2.rectangle(
-            frame,
-            (centre_x - half, centre_y - half),
-            (centre_x + half, centre_y + half),
-            draw_colour,
-            3,
-        )
-        cv2.putText(
-            frame,
-            colour_name[0].upper() if preview_colours else str(row * 3 + column + 1),
-            (centre_x - 7, centre_y + 6),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.55,
-            (0, 0, 0) if colour_name in {"white", "yellow"} else (255, 255, 255),
-            2,
-            cv2.LINE_AA,
-        )
+        cv2.circle(frame, (centre_x, centre_y), 11, draw_colour, -1, cv2.LINE_AA)
 
 
 def draw_perspective_grid(
@@ -640,9 +628,9 @@ def draw_perspective_grid(
     colour: tuple[int, int, int],
     preview_colours: list[str] | None = None,
 ) -> None:
-    """Draw a labelled 3x3 guide over a perspective face quadrilateral."""
+    """Draw a 3x3 guide with solid colour markers and no letter labels."""
     points = np.asarray(quad, dtype=np.int32)
-    cv2.polylines(frame, [points], True, colour, 2, cv2.LINE_AA)
+    cv2.polylines(frame, [points], True, colour, 1, cv2.LINE_AA)
     top_left, top_right, bottom_right, bottom_left = np.asarray(quad, dtype=float)
     for index in range(1, GRID_SIZE):
         fraction = index / GRID_SIZE
@@ -655,10 +643,7 @@ def draw_perspective_grid(
         cv2.line(frame, tuple(left.astype(int)), tuple(right.astype(int)), colour, 1,
                  cv2.LINE_AA)
     if preview_colours is None:
-        centre = points.mean(axis=0).astype(int)
-        cv2.putText(frame, label, (int(centre[0]) - 12, int(centre[1]) + 8),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, colour, 2, cv2.LINE_AA)
-        return
+        preview_colours = ["unknown"] * 9
 
     destination_centres = np.asarray([[
         ((column + 0.5) * FACE_SIZE / GRID_SIZE,
@@ -676,13 +661,7 @@ def draw_perspective_grid(
     for centre, colour_name in zip(camera_centres, preview_colours):
         x, y = (int(value) for value in centre)
         draw_colour = DISPLAY_BGR.get(colour_name, DISPLAY_BGR["unknown"])
-        cv2.circle(frame, (x, y), 12, draw_colour, 3, cv2.LINE_AA)
-        cv2.putText(
-            frame, colour_name[0].upper(), (x - 6, y + 6),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.5,
-            (0, 0, 0) if colour_name in {"white", "yellow"} else (255, 255, 255),
-            2, cv2.LINE_AA,
-        )
+        cv2.circle(frame, (x, y), 11, draw_colour, -1, cv2.LINE_AA)
 
 
 def draw_angled_status(
@@ -693,28 +672,10 @@ def draw_angled_status(
     motorized: bool = False,
 ) -> None:
     side = ANGLED_SIDE_SEQUENCE[stage_index]
-    cv2.rectangle(frame, (0, 0), (FRAME_WIDTH, 72), (0, 0, 0), -1)
-    heading = (
-        f"Angled {stage_index + 1}/4: {side.colour.upper()} front, WHITE top"
+    draw_scanner_chrome(
+        frame, f"{side.colour.title()} in front · White on top", message,
+        captured, stage_index + 1, 4, automatic=motorized and bool(captured),
     )
-    cv2.putText(frame, heading, (12, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
-                (255, 255, 255), 2, cv2.LINE_AA)
-    cv2.putText(frame, message, (12, 56), cv2.FONT_HERSHEY_SIMPLEX, 0.45,
-                (100, 230, 255), 1, cv2.LINE_AA)
-    if motorized and captured:
-        footer = f"Saved: {' '.join(captured)} | AUTO capture | R restart | Q quit"
-    elif motorized:
-        footer = "Align GREEN + WHITE | SPACE start | R reset | Q quit"
-    else:
-        footer = (
-            f"Saved: {' '.join(captured) or '-'} | SPACE capture | B back | "
-            "R reset | Q quit"
-        )
-    cv2.rectangle(frame, (0, FRAME_HEIGHT - 34), (FRAME_WIDTH, FRAME_HEIGHT),
-                  (0, 0, 0), -1)
-    cv2.putText(frame, footer, (10, FRAME_HEIGHT - 12),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.43, (255, 255, 255), 1,
-                cv2.LINE_AA)
 
 
 def draw_bottom_status(
@@ -722,23 +683,9 @@ def draw_bottom_status(
     captured: dict[str, list[SampleResult]],
     message: str,
 ) -> None:
-    cv2.rectangle(frame, (0, 0), (FRAME_WIDTH, 72), (0, 0, 0), -1)
-    cv2.putText(
-        frame, "Fallback: YELLOW face toward camera, GREEN edge at TOP",
-        (12, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (255, 255, 255), 2,
-        cv2.LINE_AA,
+    draw_scanner_chrome(
+        frame, "Scan Yellow · Green edge at the top", message, captured, 6, 6,
     )
-    cv2.putText(frame, message, (12, 56), cv2.FONT_HERSHEY_SIMPLEX, 0.45,
-                (100, 230, 255), 1, cv2.LINE_AA)
-    footer = (
-        f"Saved: {' '.join(captured) or '-'} | SPACE capture D | B rescan ORANGE | "
-        "R reset | Q quit"
-    )
-    cv2.rectangle(frame, (0, FRAME_HEIGHT - 34), (FRAME_WIDTH, FRAME_HEIGHT),
-                  (0, 0, 0), -1)
-    cv2.putText(frame, footer, (10, FRAME_HEIGHT - 12),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1,
-                cv2.LINE_AA)
 
 
 def draw_status(
@@ -747,24 +694,12 @@ def draw_status(
     captured: dict[str, list[SampleResult]],
     message: str,
 ) -> None:
-    complete = face_index >= len(FACE_SEQUENCE)
-    if complete:
-        heading = "All 6 faces captured - press B to rescan the last face"
+    if face_index >= len(FACE_SEQUENCE):
+        orientation = "All six faces captured · B to rescan"
     else:
         face = FACE_SEQUENCE[face_index]
-        heading = (
-            f"Face {face_index + 1}/6: {face.notation} ({face.colour.upper()}) - "
-            f"{face.orientation}"
-        )
-    cv2.rectangle(frame, (0, 0), (FRAME_WIDTH, 68), (0, 0, 0), -1)
-    cv2.putText(frame, heading, (12, 27), cv2.FONT_HERSHEY_SIMPLEX, 0.55,
-                (255, 255, 255), 2, cv2.LINE_AA)
-    cv2.putText(frame, message, (12, 54), cv2.FONT_HERSHEY_SIMPLEX, 0.48,
-                (100, 230, 255), 1, cv2.LINE_AA)
-    footer = f"Captured: {' '.join(captured) or '-'} | SPACE capture | B back | R reset | Q quit"
-    cv2.rectangle(frame, (0, FRAME_HEIGHT - 34), (FRAME_WIDTH, FRAME_HEIGHT), (0, 0, 0), -1)
-    cv2.putText(frame, footer, (10, FRAME_HEIGHT - 12), cv2.FONT_HERSHEY_SIMPLEX,
-                0.45, (255, 255, 255), 1, cv2.LINE_AA)
+        orientation = f"Scan {face.colour.title()} · {face.orientation.lower()}"
+    draw_scanner_chrome(frame, orientation, message, captured, face_index + 1, 6)
 
 
 def run_scanner(
@@ -794,7 +729,7 @@ def run_scanner(
             draw_grid(display_frame, preview_colours)
             draw_status(display_frame, face_index, captured, message)
             cv2.imshow("Rubik's Cube 3x3 Scanner", display_frame)
-            key = cv2.waitKey(1) & 0xFF
+            key = scanner_key("Rubik's Cube 3x3 Scanner")
 
             if key == ord("q"):
                 return None
@@ -891,7 +826,7 @@ def run_angled_scanner(
                 )
                 draw_angled_status(display_frame, stage_index, captured, message)
             cv2.imshow("Rubik's Cube Angled Scanner", display_frame)
-            key = cv2.waitKey(1) & 0xFF
+            key = scanner_key("Rubik's Cube Angled Scanner")
 
             if key == ord("q"):
                 return None
@@ -1058,7 +993,7 @@ def run_motorized_angled_scanner(
                 )
 
             cv2.imshow("Rubik's Cube Motorized Scanner", display_frame)
-            key = cv2.waitKey(1) & 0xFF
+            key = scanner_key("Rubik's Cube Motorized Scanner")
 
             if key == ord("q"):
                 platform.return_home()
