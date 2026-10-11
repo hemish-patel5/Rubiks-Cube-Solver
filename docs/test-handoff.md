@@ -48,7 +48,6 @@ Do not replace a working Raspberry Pi environment containing Picamera2 or its sy
 ```bash
 python -m unittest discover -s tests -v
 python -m compileall -q src tests
-python src/app.py --help
 python src/vision/face_scan.py --help
 ```
 
@@ -57,7 +56,7 @@ Expected results:
 - The test suite reports `Ran 54 tests` followed by `OK` (one PHP CLI test may be skipped when PHP is unavailable).
 - One dashboard contract test may be skipped if PHP CLI is not installed.
 - Compilation completes without an error.
-- Both help commands display their options without raising an exception.
+- The scanner help command displays its diagnostic options without raising an exception.
 
 Run this focused scanner fallback test if the complete suite cannot run on the Pi:
 
@@ -73,31 +72,14 @@ Load the existing configuration without printing its values:
 source config.sh
 ```
 
-For a USB camera:
-
 ```bash
-python src/app.py \
-  --scan-mode angled-sides \
-  --backend opencv \
-  --device 0 \
-  --output scan_output \
-  --database data/solve_history.db
-```
-
-For the Raspberry Pi camera:
-
-```bash
-python src/app.py \
-  --scan-mode angled-sides \
-  --backend picamera2 \
-  --output scan_output \
-  --database data/solve_history.db
+python src/app.py
 ```
 
 Expected flow:
 
-1. Green captures the upper and front faces.
-2. Continue with the red, blue, and orange views.
+1. Green captures the upper and front faces after one `SPACE` press.
+2. The platform rotates and captures red, blue, and orange automatically.
 3. If the concealed yellow face cannot be inferred unambiguously, the application requests a direct yellow-face scan.
 4. The complete six-face cube is validated before a solution is produced.
 5. Move guidance begins only after a valid scan.
