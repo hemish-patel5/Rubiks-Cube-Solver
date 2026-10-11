@@ -11,6 +11,8 @@ configure_opencv_display()
 import cv2
 import numpy as np
 
+from vision.scanner_ui import LAVENDER, MUTED, rounded_panel, text
+
 
 @dataclass
 class MoveNavigator:
@@ -36,6 +38,8 @@ class MoveNavigator:
 
 def draw_guidance(navigator: MoveNavigator) -> np.ndarray:
     frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    frame[:] = (20, 16, 19)
+    text(frame, "Solve Cube", 320, 9, 20, heading=True, centered=True)
     current = navigator.current
     if current is None:
         heading = "Cube already solved"
@@ -43,18 +47,19 @@ def draw_guidance(navigator: MoveNavigator) -> np.ndarray:
     else:
         heading = current
         subheading = f"Move {navigator.index + 1} of {len(navigator.moves)}"
-    cv2.putText(
-        frame, heading, (90, 220), cv2.FONT_HERSHEY_SIMPLEX, 2.2,
-        (255, 255, 255), 4, cv2.LINE_AA,
-    )
-    cv2.putText(
-        frame, subheading, (185, 285), cv2.FONT_HERSHEY_SIMPLEX, 0.8,
-        (100, 230, 255), 2, cv2.LINE_AA,
-    )
-    cv2.putText(
-        frame, "SPACE/N next | B back | Q cancel", (120, 430),
-        cv2.FONT_HERSHEY_SIMPLEX, 0.55, (190, 190, 190), 1, cv2.LINE_AA,
-    )
+    text(frame, heading, 320, 240, 132 if current else 36,
+         heading=True, centered=True, vertically_centered=True)
+    text(frame, subheading, 320, 330, 18, LAVENDER, centered=True)
+
+    rounded_panel(frame, (12, 436, 628, 475), (29, 24, 28), 16)
+    text(frame, f"{navigator.index + 1} / {len(navigator.moves)}" if current else "0 moves",
+         30, 449, 13, MUTED)
+    rounded_panel(frame, (226, 440, 414, 471), (185, 118, 115), 13)
+    text(frame, "SPACE / N  ·  Next" if current else "Solved", 320, 447, 14,
+         heading=True, centered=True)
+    if current:
+        text(frame, "B  Back", 440, 449, 12, MUTED)
+        text(frame, "Q  Cancel", 548, 449, 12, MUTED)
     return frame
 
 
@@ -71,6 +76,19 @@ def _keyboard_action(key: int) -> str | None:
 def show_guidance(moves: list[str]) -> str:
     """Show moves until the user completes or cancels guidance."""
     navigator = MoveNavigator(tuple(moves))
+    pending_action: str | None = None
+
+    def clicked(event: int, x: int, y: int, flags: int, userdata: object) -> None:
+        nonlocal pending_action
+        if event != cv2.EVENT_LBUTTONUP or not 440 <= y <= 475:
+            return
+        if 226 <= x <= 414:
+            pending_action = "next"
+        elif 430 <= x <= 510:
+            pending_action = "back"
+        elif 540 <= x <= 632:
+            pending_action = "cancel"
+
     if navigator.current is None:
         cv2.imshow("Rubik's Cube Solution", draw_guidance(navigator))
         cv2.waitKey(500)
@@ -80,8 +98,14 @@ def show_guidance(moves: list[str]) -> str:
     try:
         while True:
             cv2.imshow("Rubik's Cube Solution", draw_guidance(navigator))
+            try:
+                cv2.setMouseCallback("Rubik's Cube Solution", clicked)
+            except cv2.error:
+                # Headless regression runs replace imshow and have no native window.
+                pass
             key = cv2.waitKeyEx(50)
-            action = _keyboard_action(key)
+            action = _keyboard_action(key) or pending_action
+            pending_action = None
             if action == "cancel":
                 return "CANCELLED"
             if action == "back":
