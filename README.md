@@ -8,7 +8,7 @@ The project aims to develop a **Raspberry Pi-based Rubik's Cube Scanning and Sol
 
 The system focuses on reliable colour recognition using OpenCV under controlled lighting conditions. A motorised platform can automatically rotate the cube between angled scans.
 
-<img width="723" height="741" alt="Screenshot_2026-10-23_22-45-14" src="https://github.com/user-attachments/assets/3bdc9767-9923-420b-b96e-50a465250915" />
+<img width="751" height="771" alt="Screenshot_2026-10-23_22-47-04" src="https://github.com/user-attachments/assets/0fa83461-f1c1-4f00-821b-76f5d21d406c" />
 
 ---
 
